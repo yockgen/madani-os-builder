@@ -1,0 +1,19 @@
+{
+    "packages": [
+        "cloud-init",        
+        "cloud-utils-growpart",
+        "dhcpcd",        
+        "grubby",
+        "hyperv-daemons",
+        "netplan",        
+        "python3",
+        "rsyslog",
+        "sgx-backwards-compatibility",
+        "WALinuxAgent",        
+        "wireless-regdb"        
+    ],
+    "immutability": ["false"],
+    "output": ["iso"],
+    "OSType" : ["EdgeMicrovisorToolkit"],
+    "kernel": ["6.12"]
+}
