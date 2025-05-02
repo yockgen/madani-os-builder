@@ -48,7 +48,7 @@ Toolkits.
 
 #### 1. Packages
 
-**Description:** A list of software packages to be add in the OS build that user would like to be pre-built.    
+**Description:** A list of software packages to be added in the OS build that user would like to be pre-built.    
 **Example:**
 
 - cloud-init: Used for initializing cloud instances.
