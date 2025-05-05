@@ -6,4 +6,4 @@
     "immutable": true,
     "output": "iso",
     "kernel": { "version": "6.12", "cmdline": "quiet splash" }
-  }
+}
