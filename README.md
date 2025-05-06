@@ -41,17 +41,15 @@ With Earthfile, simply run:
 earthly +build
 ```
 
-### User Input Json
+### User Input JSON
 
-This section provides an explanation of the JSON input used to configure the
-build of a Linux-based operating system. The JSON structure allows users to
-specify various parameters, including packages, OS type, output format,
-immutability, and kernel version. This configuration can be used to build
-different types of Linux OS, such as Ubuntu, Wind River, and Edge Microvisor
-Toolkits.
+This section provides a detailed explanation of the JSON input structure used to configure and build a Linux-based operating system. The JSON format allows users to define key parameters such as the operating system distribution, version, architecture, software packages, output format, immutability, and kernel configuration. By customizing these parameters, users can create tailored Linux OS builds, including distributions like Ubuntu, Wind River, and Edge Microvisor Toolkits.
 
-```bash
+```json
 {
+    "distro": "eLxr",
+    "version": "12",
+    "arch": "x86_64",
     "packages": [
         "cloud-init",        
         "cloud-utils-growpart",
@@ -65,53 +63,73 @@ Toolkits.
         "WALinuxAgent",        
         "wireless-regdb"        
     ],
-    "immutability": ["false"],
-    "output": ["iso"],
-    "OSType" : ["EdgeMicrovisorToolkit"],
-    "kernel": ["6.12"]
+    "immutable": true,
+    "output": "iso",
+    "kernel": {
+      "version": "5.10.0",
+      "cmdline": "quiet splash"
+    }
 }
 ```
 
 #### Key Components
 
-#### 1. Packages
+##### 1. `distro`
 
-**Description:** A list of software packages to be added in the OS build that user would like to be pre-built.    
-**Example:**
+**Description:** Specifies the target Linux distribution to be built.  
+**Examples:**
 
-- cloud-init: Used for initializing cloud instances.
-- python3: The Python 3 programming language interpreter.
-- rsyslog: A logging system for Linux.
+- `AzureLinux`
+- `eLxr`
 
-#### 2. Immutability
+##### 2. `version`
 
-**Description:** Specifies whether the OS should be immutable.
-**Value**
+**Description:** Defines the version of the target operating system.  
+**Example:** `"12"`
 
-- "true": The OS is immutable, meaning it cannot be modified after creation.
-- "false": The OS can be modified after creation.
+##### 3. `arch`
 
-#### 3. Output
+**Description:** Specifies the architecture of the target operating system.  
+**Examples:**
 
-**Description:** Defines the format of the output build.
-**Value**
+- `x86_64`
+- `arm64`
 
-- "iso": The OS will be built as an ISO file, suitable for installation or booting.
-- "raw": The OS will be built as a raw disk image, useful for direct disk writing.
-- "vhd": The OS will be built as a VHD (Virtual Hard Disk) file, often used for virtual environments.
+##### 4. `packages`
 
-#### 4. OSType
+**Description:** A list of software packages to be included in the OS build. These packages will be pre-installed in the resulting image.  
+**Examples:**
 
-**Description:** Specifies the type of operating system to be built.
-**Value**
+- `cloud-init`: Used for initializing cloud instances.
+- `python3`: The Python 3 programming language interpreter.
+- `rsyslog`: A logging system for Linux.
 
-- "EdgeMicrovisorToolkit": Indicates the build is for Edge Microvisor Toolkits.
-- Other possible values could include "Ubuntu", "Wind River", etc.
+##### 5. `immutable`
 
-#### 5. Kernel
+**Description:** Indicates whether the operating system should be immutable.  
+**Values:**
 
-**Description:** Specifies the kernel version or type to be used in the OS, and
-allows one to customize the kernel command line.
+- `true`: The OS is immutable, meaning it cannot be modified after creation.
+- `false`: The OS is mutable, allowing modifications after creation.
+
+##### 6. `output`
+
+**Description:** Specifies the format of the output build.  
+**Values:**
+
+- `iso`: The OS will be built as an ISO file, suitable for installation or booting.
+- `raw`: The OS will be built as a raw disk image, useful for direct disk writing.
+- `vhd`: The OS will be built as a VHD (Virtual Hard Disk) file, commonly used in virtual environments.
+
+##### 7. `kernel`
+
+**Description:** Defines the kernel version and allows customization of the kernel command line.  
+**Attributes:**
+
+- `version`: Specifies the kernel version to be used.  
+  **Example:** `"5.10.0"`
+- `cmdline`: Provides additional kernel command-line parameters.  
+  **Example:** `"quiet splash"`
 
 Run the sample JSON files against the defined [schema](schema/os-image-composer.schema.json).
 There are two sample JSON files, one [valid](/testdata/valid.json) and one with
