@@ -37,7 +37,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			fmt.Printf("failed to sync logger: %v\n", err)
+		}
+	}()
 	zap.ReplaceGlobals(logger)
 	sugar := zap.S()
 

@@ -53,7 +53,9 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 				// ensure destination directory exists
 				if err := os.MkdirAll(destDir, 0755); err != nil {
 					logger.Errorf("failed to create dest dir %s: %v", destDir, err)
-					bar.Add(1)
+					if err := bar.Add(1); err != nil {
+						logger.Errorf("failed to add to progress bar: %v", err)
+					}
 					continue
 				}
 
@@ -61,7 +63,9 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 				if fi, err := os.Stat(destPath); err == nil {
 					if fi.Size() > 0 {
 						logger.Infof("[INFO] skipping existing %s", name)
-						bar.Add(1)
+						if err := bar.Add(1); err != nil {
+							logger.Errorf("failed to add to progress bar: %v", err)
+						}
 						continue
 					}
 					// file exists but zero size: re-download
@@ -95,7 +99,9 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 					logger.Errorf("downloading %s failed: %v", url, err)
 				} 
 				// increment progress bar
-				bar.Add(1)
+				if err := bar.Add(1); err != nil {
+					logger.Errorf("failed to add to progress bar: %v", err)
+				}
 			}
 		}()
 	}
@@ -107,6 +113,8 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 	close(jobs)
 
 	wg.Wait()
-	bar.Finish()
+	if err := bar.Finish(); err != nil {
+		logger.Errorf("failed to finish progress bar: %v", err)
+	}
 	return nil
 }

@@ -63,8 +63,6 @@ func VerifyAll(paths []string, pubkeyPath string, workers int) []Result {
 
                 if err != nil {
                     logger.Errorf("verification %s failed: %v", rpmPath, err)
-                } else {
-                   // logger.Infof("verified %s OK", rpmPath)
                 }
 
                 results[idx] = Result{
@@ -74,7 +72,9 @@ func VerifyAll(paths []string, pubkeyPath string, workers int) []Result {
                     Error:    err,
                 }
 
-                bar.Add(1)
+                if err := bar.Add(1); err != nil {
+                    logger.Errorf("failed to add to progress bar: %v", err)
+                }
             }
         }()
     }
@@ -86,7 +86,9 @@ func VerifyAll(paths []string, pubkeyPath string, workers int) []Result {
     close(jobs)
 
     wg.Wait()
-    bar.Finish()
+    if err := bar.Finish(); err != nil {
+        logger.Errorf("failed to finish progress bar: %v", err)
+    }
 
     return results
 }

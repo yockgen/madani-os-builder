@@ -26,7 +26,7 @@ golang-base:
     COPY cmd/ ./cmd
     COPY internal/ ./internal
     COPY schema/ ./schema
-
+    COPY testdata/ ./testdata
 
 all:
     BUILD +build
@@ -44,4 +44,13 @@ build:
             ./cmd/image-composer
     SAVE ARTIFACT build/image-composer AS LOCAL ./build/image-composer
 
+test:
+    FROM +golang-base
+    RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
+        go test -v ./...
 
+lint:
+    FROM +golang-base
+    WORKDIR /work
+    RUN --mount=type=cache,target=/root/.cache \
+        golangci-lint run ./...
