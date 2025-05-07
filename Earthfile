@@ -52,5 +52,6 @@ test:
 lint:
     FROM +golang-base
     WORKDIR /work
+    COPY . /work
     RUN --mount=type=cache,target=/root/.cache \
         golangci-lint run ./...
