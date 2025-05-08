@@ -7,7 +7,7 @@
 Image-Composer uses a single CLI with subcommands to provide a consistent user experience while maintaining flexibility. The tool's architecture is built around:
 
 1. A global configuration file that defines system-wide settings like cache locations and provider configurations
-2. Image specification files (in YAML format) that define per-image build requirements
+2. Build specification files (in YAML format) that define per-image build requirements
 
 The tool follows a staged build process, supporting package caching, image caching, and various customization options to speed up development cycles and ensure reproducible builds.
 
@@ -50,7 +50,7 @@ flowchart TD
     
 ```
 
-The primary workflow is through the `build` command, which reads an image specification file, checks if an image matching those specifications is already cached, and either uses the cached image or runs the build pipeline to create a new image.
+The primary workflow is through the `build` command, which reads an build specification file, checks if an image matching those specifications is already cached, and either uses the cached image or runs the build pipeline to create a new image.
 
 ## Usage
 
@@ -102,7 +102,7 @@ Options:
 
 ### Validate Command
 
-Validate an image specification file without building it. This allows checking for errors in your specification before committing to a full build process.
+Validate an build specification file without building it. This allows checking for errors in your specification before committing to a full build process.
 
 ```bash
 image-composer validate [options] SPEC_FILE
@@ -261,9 +261,9 @@ providers:
     secure_boot_keys_dir: "/etc/image-composer/secure-keys/" # Secure boot key location
 ```
 
-### Image Specification File
+### Build Specification File
 
-The image specification file (YAML format) defines the requirements for a specific image. This is where you define exactly what goes into your custom OS image, including packages, configurations, and customizations.
+The build specification file (YAML format) defines the requirements for a specific image. This is where you define exactly what goes into your custom OS image, including packages, configurations, and customizations.
 
 ```yaml
 image:

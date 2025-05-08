@@ -26,7 +26,7 @@ The package cache stores downloaded OS packages (like .deb files for Ubuntu or .
 
 1. **Key Characteristics**:
    - Organized by package name, version, architecture, and source repository
-   - Each package is stored only once, regardless of how many image specs use it
+   - Each package is stored only once, regardless of how many build specs use it
    - Timestamps track when each package was last used
 
 1. **Garbage Collection**:
@@ -40,18 +40,18 @@ The package cache stores downloaded OS packages (like .deb files for Ubuntu or .
 - Dramatically reduces build time for similar images
 - Decreases network bandwidth usage
 - Enables building images without internet access (if packages were previously cached)
-- Works even when image specifications change
+- Works even when build specifications change
 
 ## Image Cache
 
 ### What Image Cache Does
 
-The image cache stores complete built OS images to skip the entire build process if an identical image specification has been built before.
+The image cache stores complete built OS images to skip the entire build process if an identical build specification has been built before.
 
 ### How Image Cache Works
 
 1. **Before Building**:
-   - The system generates a unique hash based on the entire image specification
+   - The system generates a unique hash based on the entire build specification
    - It checks if an image with that hash exists in the cache
    - If found, it simply copies the cached image to the requested output location
    - If not found, it proceeds with the normal build process
@@ -77,7 +77,7 @@ The two caching mechanisms complement each other and operate at different levels
 
 ```mermaid
 flowchart TD
-    Start([Start Build]) --> ReadSpec[Read Image Specification]
+    Start([Start Build]) --> ReadSpec[Read Build Specification]
     ReadSpec --> GenerateHash[Generate Spec Hash]
     GenerateHash --> CheckImageCache{Image in Cache?}
     
@@ -180,7 +180,7 @@ storage:
     max_count: 5               # Maximum number of images to keep
 ```
 
-### Per-Image Specification (in image spec YAML)
+### Per-Build Specification (in build spec YAML)
 
 ```yaml
 build:

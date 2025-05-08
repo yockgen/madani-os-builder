@@ -4,7 +4,7 @@ Templates in Image-Composer provide a straightforward way to standardize and reu
 
 ## What Are Templates?
 
-Templates are pre-defined image specifications that serve as a foundation for building OS images. They allow you to:
+Templates are pre-defined build specifications that serve as a foundation for building OS images. They allow you to:
 
 - Create standardized baseline configurations
 - Ensure consistency across multiple images
@@ -13,11 +13,11 @@ Templates are pre-defined image specifications that serve as a foundation for bu
 
 ## How Templates Work
 
-Templates are simply YAML files with a structure similar to regular image specifications, but with added variable placeholders that can be customized when used.
+Templates are simply YAML files with a structure similar to regular build specifications, but with added variable placeholders that can be customized when used.
 
 ### Template Structure
 
-A template includes standard image specification sections with variables where customization is needed:
+A template includes standard build specification sections with variables where customization is needed:
 
 ```yaml
 # Example template: ubuntu-server.yml
