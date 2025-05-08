@@ -1,4 +1,4 @@
-package elxr12
+package emt31
 
 import (
 	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/config"
@@ -17,25 +17,25 @@ type repoConfig struct {
 	GPGKey       string
 }
 
-// eLxr12 implements provider.Provider
-type eLxr12 struct {
+// emt31 implements provider.Provider
+type emt31 struct {
 	repo repoConfig
 	spec *config.BuildSpec
 }
 
 func init() {
-	provider.Register(&eLxr12{})
+	provider.Register(&emt31{})
 }
 
 // Name returns the unique name of the provider
-func (p *eLxr12) Name() string {
+func (p *emt31) Name() string {
 	logger := zap.L().Sugar()
 	logger.Infof("Name() called - Placeholder: This function will return the provider's unique name.")
-	return "eLxr12"
+	return "EMT3.1"
 }
 
 // Init will initialize the provider, fetching repo configuration
-func (p *eLxr12) Init(spec *config.BuildSpec) error {
+func (p *emt31) Init(spec *config.BuildSpec) error {
 	logger := zap.L().Sugar()
 	logger.Infof("Init() called - Placeholder: This function will be implemented by the respective owner.")
 	p.repo = repoConfig{
@@ -48,21 +48,21 @@ func (p *eLxr12) Init(spec *config.BuildSpec) error {
 }
 
 // Packages returns the list of packages
-func (p *eLxr12) Packages() ([]provider.PackageInfo, error) {
+func (p *emt31) Packages() ([]provider.PackageInfo, error) {
 	logger := zap.L().Sugar()
 	logger.Infof("Packages() called - Placeholder: This function will be implemented by the respective owner.")
 	return nil, nil
 }
 
 // Validate verifies the downloaded files
-func (p *eLxr12) Validate(destDir string) error {
+func (p *emt31) Validate(destDir string) error {
 	logger := zap.L().Sugar()
 	logger.Infof("Validate() called with destDir=%s - Placeholder: This function will be implemented by the respective owner.", destDir)
 	return nil
 }
 
 // Resolve resolves dependencies
-func (p *eLxr12) Resolve(destDir string) ([]string, error) {
+func (p *emt31) Resolve(destDir string) ([]string, error) {
 	logger := zap.L().Sugar()
 	logger.Infof("Resolve() called with destDir=%s - Placeholder: This function will be implemented by the respective owner.", destDir)
 	return []string{}, nil

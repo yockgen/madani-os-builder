@@ -10,6 +10,8 @@ import (
 	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider"
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/azurelinux3" // register provider
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/elxr12"      // register provider
+	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/emt3_0"      // register provider
+	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/emt3_1"      // register provider
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
