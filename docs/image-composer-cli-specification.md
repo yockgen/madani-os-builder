@@ -50,7 +50,8 @@ flowchart TD
     
 ```
 
-The primary workflow is through the `build` command, which reads an build specification file, checks if an image matching those specifications is already cached, and either uses the cached image or runs the build pipeline to create a new image.
+The primary workflow is through the `build` command, which reads an build specification file, checks if an image matching those specifications is already cached, and either uses the cached image or runs the build pipeline to create a new image.  
+**_NOTE:_**  The build pipeline will have package caching mechanism unless instructed to skip in the command option `--no-package-cache
 
 ## Usage
 
