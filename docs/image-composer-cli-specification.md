@@ -283,11 +283,11 @@ build:
     use_package_cache: true                  # Whether to use the package cache
     use_image_cache: true                    # Whether to use the image cache
   stages:                                    # Build stages in sequence
-    - base                                   # Creates the base OS
-    - packages                               # Installs required packages
+    - validate                               # Validate the build spe
+    - packages                               # Pull required packages and dependencies
+    - compose                                # Compose image
     - configuration                          # Applies configurations
-    - finalize                               # Finalizes the image
-
+    - finalize                               # verify and optput the image 
 customizations:
   # OS customizations
   packages:
