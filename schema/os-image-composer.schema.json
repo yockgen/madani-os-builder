@@ -65,7 +65,7 @@
     "allOf": [
         {
           "if":   { "properties": { "distro": { "const": "EMT" } } },
-          "then": { "properties": { "version": { "enum": ["3.0", "3.1"] } } }
+          "then": { "properties": { "version": { "enum": ["3.0"] } } }
         },
         {
           "if":   { "properties": { "distro": { "const": "AzureLinux" } } },
