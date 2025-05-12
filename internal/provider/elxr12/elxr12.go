@@ -62,8 +62,15 @@ func (p *eLxr12) Validate(destDir string) error {
 }
 
 // Resolve resolves dependencies
-func (p *eLxr12) Resolve(destDir string) ([]string, error) {
+func (p *eLxr12) Resolve(req []provider.PackageInfo, all []provider.PackageInfo) ([]provider.PackageInfo, error) {
 	logger := zap.L().Sugar()
-	logger.Infof("Resolve() called with destDir=%s - Placeholder: This function will be implemented by the respective owner.", destDir)
-	return []string{}, nil
+	logger.Infof("Resolve() called with destDir=%s - Placeholder: This function will be implemented by the respective owner.")
+	return nil, nil
+}
+
+// MatchRequested matches requested packages
+func (p *eLxr12) MatchRequested(requests []string, all []provider.PackageInfo) ([]provider.PackageInfo, error) {
+	logger := zap.L().Sugar()
+	logger.Infof("MatchRequested() called - Placeholder: This function will be implemented by the respective owner.")
+	return nil, nil
 }

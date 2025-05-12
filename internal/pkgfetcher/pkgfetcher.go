@@ -62,7 +62,7 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 				destPath := filepath.Join(destDir, name)
 				if fi, err := os.Stat(destPath); err == nil {
 					if fi.Size() > 0 {
-						logger.Infof("[INFO] skipping existing %s", name)
+						//logger.Infof("[INFO] skipping existing %s", name)
 						if err := bar.Add(1); err != nil {
 							logger.Errorf("failed to add to progress bar: %v", err)
 						}

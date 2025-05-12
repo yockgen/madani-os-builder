@@ -6,14 +6,16 @@ import (
 
 // PackageInfo holds everything you need to fetch + verify one artifact.
 type PackageInfo struct {
-	Name     string // e.g. "abseil-cpp"
-	URL      string // download URL
-	Checksum string // optional pre-known digest
+	Name     	string 		// e.g. "abseil-cpp"
+	URL      	string 		// download URL
+	Checksum 	string 		// optional pre-known digest
+	Provides  	[]string 	// capabilities this package provides (rpm:entry names)
+    Requires  	[]string 	// capabilities this package requires
 }
 
 // Provider is the interface every OSV plugin must implement.
 type Provider interface {
-	// Name is a unique ID, e.g. "azurelinux3" or "debian12".
+	// Name is a unique ID, e.g. "azurelinux3" or "emt3".
 	Name() string
 
 	// Init does any one-time setup: import GPG keys, register repos, etc.
@@ -23,11 +25,15 @@ type Provider interface {
 	Packages() ([]PackageInfo, error)
 
 	// Validate walks the destDir and verifies each downloaded file.
-	// You can shell out to `rpm -Kv`, `dpkg-sig`, or use Go APIs here.
 	Validate(destDir string) error
 
+	// MatchRequested takes the list of requested packages and returns
+	// the list of PackageInfo that match.
+	MatchRequested(requested []string, all []PackageInfo) ([]PackageInfo, error)
+
 	// Resolve walks your local cache in destDir and returns the full
-	Resolve(destDir string) ([]string, error)
+	Resolve(req []PackageInfo, all []PackageInfo) ([]PackageInfo, error)
+
 }
 
 var (

@@ -76,7 +76,7 @@ func main() {
 
 	providerName := bc.Distro + bc.Version
 
-	// initialize provider
+	// get provider by name
 	p, ok := provider.Get(providerName)
 	if !ok {
 		sugar.Fatalf("provider not found, %s", providerName)
@@ -87,19 +87,37 @@ func main() {
 		sugar.Fatalf("provider init: %v", err)
 	}
 
-	// fetch package list
-	pkgs, err := p.Packages()
+	// fetch the entire package list
+	all, err := p.Packages()
 	if err != nil {
 		sugar.Fatalf("getting packages: %v", err)
 	}
 
+	// match the packages in the build spec against all the packages
+	req, err := p.MatchRequested(bc.Packages, all)
+	if err != nil {
+		sugar.Fatalf("matching packages: %v", err)
+	}
+	sugar.Infof("matched al total of %d packages", len(req))
+	for _, pkg := range req {
+		sugar.Infof("-> %s", pkg.Name)
+	}
+	
+	// resolve the dependencies of the requested packages
+	needed, err := p.Resolve(req, all)
+	if err != nil {
+		sugar.Fatalf("resolving packages: %v", err)
+	}
+	sugar.Infof("resolved %d packages", len(needed))
+
+
 	// extract URLs
-	urls := make([]string, len(pkgs))
-	for i, pkg := range pkgs {
+	urls := make([]string, len(needed))
+	for i, pkg := range needed {
 		urls[i] = pkg.URL
 	}
 
-	// start download
+	// populate the cache download
 	absDest, err := filepath.Abs(destDir)
 	if err != nil {
 		sugar.Fatalf("invalid dest: %v", err)
@@ -111,15 +129,8 @@ func main() {
 	sugar.Info("all downloads complete")
 
 	// verify downloaded packages
-	if err := p.Validate("./downloads"); err != nil {
+	if err := p.Validate(destDir); err != nil {
 		sugar.Fatalf("verification failed: %v", err)
-	}
-
-	// resolve all package dependencies
-	if resolved, err := p.Resolve("./downloads"); err != nil {
-		sugar.Fatalf("resolution failed: %v", err)
-	} else {
-		sugar.Infof("resolved packages: %v", resolved)
 	}
 
 }
