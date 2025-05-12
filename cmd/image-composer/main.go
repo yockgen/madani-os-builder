@@ -13,6 +13,7 @@ import (
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/emt3_0"      // register provider
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"io"
 )
 
 // temporary placeholder for configuration
@@ -22,27 +23,42 @@ const (
 	destDir = "./downloads"
 )
 
-// setupLogger initializes a zap logger with development configuration.
-// It sets the encoder to use color for levels and ISO8601 for time.
-func setupLogger() (*zap.Logger, error) {
-	cfg := zap.NewDevelopmentConfig()
-	cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	cfg.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
-	return cfg.Build()
-}
+// nopSyncer wraps an io.Writer but its Sync() does nothing.
+type nopSyncer struct{ io.Writer }
+func (n nopSyncer) Sync() error { return nil }
 
+// setupLogger initializes a zap logger with development config,
+// but replaces the usual fsyncing writer with one whose Sync() is a no-op.
+func setupLogger() (*zap.Logger, error) {
+    // start from DevConfig so we get console output, color, ISO8601 time, etc.
+    cfg := zap.NewDevelopmentConfig()
+    cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+    cfg.EncoderConfig.EncodeTime  = zapcore.ISO8601TimeEncoder
+    cfg.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
+
+    // create a console encoder using your EncoderConfig
+    encoder := zapcore.NewConsoleEncoder(cfg.EncoderConfig)
+    // wrap stderr in our nopSyncer
+    writer  := nopSyncer{os.Stderr}
+    // build a core that writes to that writer
+    core    := zapcore.NewCore(encoder, writer, cfg.Level)
+
+    // mirror the options NewDevelopmentConfig() would have added
+    opts := []zap.Option{
+        zap.AddCaller(),
+        zap.Development(),
+        zap.AddStacktrace(zapcore.ErrorLevel),
+    }
+
+    return zap.New(core, opts...), nil
+}
 func main() {
 
 	logger, err := setupLogger()
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			fmt.Printf("failed to sync logger: %v\n", err)
-		}
-	}()
+	defer logger.Sync()            // never errors
 	zap.ReplaceGlobals(logger)
 	sugar := zap.S()
 
