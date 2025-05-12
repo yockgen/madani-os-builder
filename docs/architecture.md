@@ -106,7 +106,7 @@ classDiagram
     EMT Provider o-- Chroot Environment
 ```
 
-The following table captures the SW entities and their functions.
+The following table captures the SW entities and description of their functions.
 
 | SW Component | Description |
 | -------- | ------- |
