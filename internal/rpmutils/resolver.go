@@ -125,14 +125,14 @@ func ResolvePackageInfos(
 		}
 		queue = append(queue, pi.Name)
 	}
-	
+
 	// bestProvider maps cap -> the single “best” pkgName
 	bestProvider := make(map[string]string, len(provides))
 	for cap, provs := range provides {
-    	// pick the lexically greatest filename; 
+		// pick the lexically greatest filename;
 		// for real RPM semver we might want to check rpmutils.VersionCompare()
 		sort.Strings(provs)
-    	bestProvider[cap] = provs[len(provs)-1]
+		bestProvider[cap] = provs[len(provs)-1]
 	}
 
 	// BFS over the require→provide graph:
@@ -146,10 +146,10 @@ func ResolvePackageInfos(
 		neededSet[cur] = struct{}{}
 
 		for _, cap := range requires[cur] {
- 			if best, ok := bestProvider[cap]; ok {
-  				if _, seen := neededSet[best]; !seen {
-            		queue = append(queue, best)
-        		}
+			if best, ok := bestProvider[cap]; ok {
+				if _, seen := neededSet[best]; !seen {
+					queue = append(queue, best)
+				}
 			}
 		}
 	}
