@@ -14,6 +14,7 @@ import (
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/azurelinux3" // register provider
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/elxr12"      // register provider
 	_ "github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider/emt3_0"      // register provider
+	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/rpmutils"
 	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/validate"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -32,6 +33,7 @@ var (
 	workers  int    = 8
 	cacheDir string = "./downloads"
 	verbose  bool
+	dotFile  string
 )
 
 // nopSyncer wraps an io.Writer but its Sync() does nothing.
@@ -125,6 +127,12 @@ func executeBuild(cmd *cobra.Command, args []string) error {
 	}
 	sugar.Infof("resolved %d packages", len(needed))
 
+	// If a dot file is specified, generate the dependency graph
+	if dotFile != "" {
+		if err := rpmutils.GenerateDot(needed, dotFile); err != nil {
+			sugar.Errorf("generating dot file: %v", err)
+		}
+	}
 	// Extract URLs
 	urls := make([]string, len(needed))
 	for i, pkg := range needed {
@@ -474,6 +482,7 @@ If needed, it will also update your shell profile to load the completions.`,
 	buildCmd.Flags().IntVarP(&workers, "workers", "w", workers, "Number of concurrent download workers")
 	buildCmd.Flags().StringVarP(&cacheDir, "cache-dir", "d", cacheDir, "Package cache directory")
 	buildCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
+	buildCmd.Flags().StringVarP(&dotFile, "dotfile", "f", "", "Generate a dot file for the dependency graph")
 
 	// Add commands to root command
 	rootCmd.AddCommand(buildCmd)

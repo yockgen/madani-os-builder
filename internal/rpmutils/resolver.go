@@ -4,14 +4,16 @@ import (
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
-	"github.com/cavaliergopher/rpm"
-	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
+
+	"github.com/cavaliergopher/rpm"
+	"github.com/intel-innersource/os.linux.tiberos.os-curation-tool/internal/provider"
+	"go.uber.org/zap"
 )
 
 // Index maps provided capabilities to RPM paths and RPM paths to their requirements.
@@ -22,7 +24,7 @@ type Index struct {
 
 // BuildIndex scans all RPM files under dir and builds the Index.
 func BuildIndex(dir string) (*Index, error) {
-	//logger := zap.L().Sugar()
+
 	idx := &Index{
 		Provides: make(map[string][]string),
 		Requires: make(map[string][]string),
@@ -62,38 +64,29 @@ func BuildIndex(dir string) (*Index, error) {
 	return idx, nil
 }
 
-// ResolveDependencies returns the full set of RPMs needed
-// starting from the given root paths, walking requires -> provides.
-func ResolveDependencies(roots []string, idx *Index) []string {
+func GenerateDot(pkgs []provider.PackageInfo, file string) error {
 	logger := zap.L().Sugar()
-	needed := make(map[string]struct{})
-	queue := append([]string{}, roots...)
+	logger.Infof("Generating DOT file %s", file)
 
-	logger.Infof("resolving dependencies for %d RPMs", len(roots))
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		if _, seen := needed[cur]; seen {
-			continue
-		}
-		needed[cur] = struct{}{}
+	outFile, err := os.Create(file)
+	if err != nil {
+		return fmt.Errorf("creating DOT file: %w", err)
+	}
+	defer outFile.Close()
 
-		// Enqueue all providers of each required capability
-		for _, capName := range idx.Requires[cur] {
-			for _, providerRPM := range idx.Provides[capName] {
-				if _, seen := needed[providerRPM]; !seen {
-					queue = append(queue, providerRPM)
-				}
-			}
+	fmt.Fprintln(outFile, "digraph G {")
+	fmt.Fprintln(outFile, "  rankdir=LR;")
+	for _, pkg := range pkgs {
+		// Quote the node ID and label
+		fmt.Fprintf(outFile, "\t\"%s\" [label=\"%s\"];\n", pkg.Name, pkg.Name)
+		for _, dep := range pkg.Requires {
+			// Quote both source and target
+			fmt.Fprintf(outFile, "\t\"%s\" -> \"%s\";\n", pkg.Name, dep)
 		}
 	}
 
-	// Collect result
-	result := make([]string, 0, len(needed))
-	for pkg := range needed {
-		result = append(result, pkg)
-	}
-	return result
+	fmt.Fprintln(outFile, "}")
+	return nil
 }
 
 // ResolvePackageInfos takes a seed list of PackageInfos (the exact versions
