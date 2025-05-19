@@ -326,4 +326,3 @@ func fetchPrimaryURL(repomdURL string) (string, error) {
 	}
 	return "", fmt.Errorf("primary location not found in %s", repomdURL)
 }
-
