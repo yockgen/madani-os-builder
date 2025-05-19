@@ -76,6 +76,7 @@ func (p *eLxr12) Init(spec *config.BuildSpec) error {
 	}
 	p.repoCfg = cfg
 	p.gzHref = cfg.CfgURL
+	p.spec = spec
 
 	logger.Infof("initialized eLxr provider repo section=%s", cfg.Section)
 	logger.Infof("name=%s", cfg.Name)

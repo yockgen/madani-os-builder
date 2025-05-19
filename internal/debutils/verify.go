@@ -55,7 +55,7 @@ func VerifyAll(paths []string, pkgChecksum map[string]string, pubkeyPath string,
 	// worker goroutines
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
-		go func() {
+		go func(workerIdx int) {
 			defer wg.Done()
 			for idx := range jobs {
 				debPath := paths[idx]
@@ -63,7 +63,7 @@ func VerifyAll(paths []string, pkgChecksum map[string]string, pubkeyPath string,
 				bar.Describe("verifying " + name)
 
 				start := time.Now()
-				err := verifyWithGoDeb(paths[i], pkgChecksum)
+				err := verifyWithGoDeb(debPath, pkgChecksum)
 				ok := err == nil
 
 				if err != nil {
@@ -81,7 +81,7 @@ func VerifyAll(paths []string, pkgChecksum map[string]string, pubkeyPath string,
 					logger.Errorf("failed to add to progress bar: %v", err)
 				}
 			}
-		}()
+		}(i)
 	}
 
 	// enqueue indices
