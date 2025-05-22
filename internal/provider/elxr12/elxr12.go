@@ -18,9 +18,9 @@ import (
 // eLxr: https://mirror.elxr.dev/elxr/dists/aria/main/binary-amd64/Packages.gz
 // eLxr Donwload Path: https://mirror.elxr.dev/elxr/pool/main/p/python3-defaults/2to3_3.11.2-1_all.deb
 const (
-	baseURL    = "https://mirror.elxr.dev/elxr/dists/aria/main/"
-	configName = "Packages.gz"
-	repodata   = ""
+	baseURL     = "https://mirror.elxr.dev/elxr/dists/aria/main/"
+	configName  = "Packages.gz"
+	ReleaseFile = "Release"
 )
 
 // repoConfig hold repo related info
@@ -33,6 +33,8 @@ type repoConfig struct {
 	RepoGPGCheck bool
 	Enabled      bool
 	GPGKey       string
+	ReleaseFile  string
+	Signature    string
 }
 
 type pkgChecksum struct {
@@ -70,8 +72,9 @@ func (p *eLxr12) Init(spec *config.BuildSpec) error {
 		spec.Arch = "binary-amd64"
 	}
 	p.repoURL = baseURL + spec.Arch + "/" + configName
+	releaseFileURL := baseURL + spec.Arch + "/" + ReleaseFile
 
-	cfg, err := loadRepoConfig(p.repoURL)
+	cfg, err := loadRepoConfig(p.repoURL, releaseFileURL)
 	if err != nil {
 		logger.Errorf("parsing repo config failed: %v", err)
 		return err
@@ -219,19 +222,20 @@ func (p *eLxr12) MatchRequested(requests []string, all []provider.PackageInfo) (
 
 }
 
-func loadRepoConfig(repoUrl string) (repoConfig, error) {
+func loadRepoConfig(repoUrl string, releaseFileUrl string) (repoConfig, error) {
 	logger := zap.L().Sugar()
 
 	var rc repoConfig
 
-	//example direct download: wget https://deb.debian.org/debian/pool/main/0/0ad/0ad_0.0.26-3_amd64.deb
 	rc.CfgURL = repoUrl
+	rc.ReleaseFile = releaseFileUrl
 	rc.PkgPrefixUrl = "https://mirror.elxr.dev/elxr/"
 	rc.Name = "Wind River eLxr 12"
 	rc.GPGCheck = true
 	rc.RepoGPGCheck = true
 	rc.Enabled = true
 	rc.GPGKey = "https://mirror.elxr.dev/elxr/public.gpg"
+	rc.Signature = "https://mirror.elxr.dev/elxr/dists/aria/Release.gpg"
 	rc.Section = "main"
 
 	logger.Infof("repo config: %+v", rc)
