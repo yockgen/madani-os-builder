@@ -96,11 +96,12 @@ func ResolvePackageInfos(requested []provider.PackageInfo, all []provider.Packag
 }
 
 // ParsePrimary parses the Packages.gz file from gzHref.
-func ParsePrimary(baseURL, pkggz string, releaseFile string, releaseSign string, pbGPGKey string) ([]provider.PackageInfo, error) {
+func ParsePrimary(baseURL string, pkggz string, releaseFile string, releaseSign string, pbGPGKey string, buildPath string) ([]provider.PackageInfo, error) {
 	logger := zap.L().Sugar()
 
 	// Ensure pkgMetaDir exists, create if not
-	pkgMetaDir := "./builds/elxr12"
+	// pkgMetaDir := "./builds/elxr12"
+	pkgMetaDir := buildPath
 	if err := os.MkdirAll(pkgMetaDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create pkgMetaDir: %v", err)
 	}

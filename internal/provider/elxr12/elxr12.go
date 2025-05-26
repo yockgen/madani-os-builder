@@ -34,6 +34,7 @@ type repoConfig struct {
 	PbGPGKey     string
 	ReleaseFile  string
 	ReleaseSign  string
+	BuildPath    string // path to store builds, relative to the root of the repo
 }
 
 type pkgChecksum struct {
@@ -91,7 +92,7 @@ func (p *eLxr12) Packages() ([]provider.PackageInfo, error) {
 	logger := zap.L().Sugar()
 	logger.Infof("fetching packages from %s", p.repoCfg.PkgList)
 
-	packages, err := debutils.ParsePrimary(p.repoCfg.PkgPrefix, p.gzHref, p.repoCfg.ReleaseFile, p.repoCfg.ReleaseSign, p.repoCfg.PbGPGKey)
+	packages, err := debutils.ParsePrimary(p.repoCfg.PkgPrefix, p.gzHref, p.repoCfg.ReleaseFile, p.repoCfg.ReleaseSign, p.repoCfg.PbGPGKey, p.repoCfg.BuildPath)
 	if err != nil {
 		logger.Errorf("parsing %s failed: %v", p.gzHref, err)
 	}
@@ -231,6 +232,7 @@ func loadRepoConfig(repoUrl string) (repoConfig, error) {
 	rc.PbGPGKey = "https://mirror.elxr.dev/elxr/public.gpg"
 	rc.ReleaseSign = "https://mirror.elxr.dev/elxr/dists/aria/Release.gpg"
 	rc.Section = "main"
+	rc.BuildPath = "./builds/elxr12"
 
 	logger.Infof("repo config: %+v", rc)
 
