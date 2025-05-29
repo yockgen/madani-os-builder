@@ -1,0 +1,5 @@
+3.0_x86_64:
+  -
+    tag: base
+    baseurl: "https://files-rs.edgeorchestration.intel.com/files-edge-orch/microvisor/rpm/3.0"
+    repodata: "https://files-rs.edgeorchestration.intel.com/files-edge-orch/microvisor/rpm/3.0/repodata"
