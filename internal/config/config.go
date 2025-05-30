@@ -88,17 +88,19 @@ func DefaultGlobalConfig() *GlobalConfig {
 
 // LoadGlobalConfig loads configuration from the specified path
 func LoadGlobalConfig(configPath string) (*GlobalConfig, error) {
+	// Start with defaults
 	config := DefaultGlobalConfig()
 
+	// If no config file specified or doesn't exist, return defaults
 	if configPath == "" {
 		return config, nil
 	}
 
-	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return config, nil // Return defaults if file doesn't exist
 	}
 
+	// Load and merge config file values
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file %s: %w", configPath, err)
@@ -115,7 +117,7 @@ func LoadGlobalConfig(configPath string) (*GlobalConfig, error) {
 		return nil, fmt.Errorf("unsupported config file format: %s (supported: .yaml, .yml)", ext)
 	}
 
-	// Validate and set defaults for empty values
+	// Validate the final configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
@@ -145,29 +147,23 @@ func (gc *GlobalConfig) SaveGlobalConfig(configPath string) error {
 	return nil
 }
 
-// Validate checks the configuration for consistency and sets defaults
+// Validate checks the configuration for consistency and applies constraints
+// Note: This should NOT set defaults - that's done in DefaultGlobalConfig()
 func (gc *GlobalConfig) Validate() error {
-	// Validate workers
+	// Validate workers range
 	if gc.Workers <= 0 {
-		gc.Workers = 8
+		return fmt.Errorf("workers must be greater than 0, got %d", gc.Workers)
 	}
 	if gc.Workers > 100 {
 		return fmt.Errorf("workers cannot exceed 100, got %d", gc.Workers)
 	}
 
-	// Validate cache directory
+	// Validate required fields are not empty
 	if gc.CacheDir == "" {
-		gc.CacheDir = "./cache"
+		return fmt.Errorf("cache_dir cannot be empty")
 	}
-
-	// Validate work directory
 	if gc.WorkDir == "" {
-		gc.WorkDir = "./workspace"
-	}
-
-	// Validate temp directory (empty means use system temp)
-	if gc.TempDir == "" {
-		gc.TempDir = os.TempDir()
+		return fmt.Errorf("work_dir cannot be empty")
 	}
 
 	// Validate logging level
@@ -175,6 +171,11 @@ func (gc *GlobalConfig) Validate() error {
 	if !contains(validLevels, gc.Logging.Level) {
 		return fmt.Errorf("invalid log level %q, must be one of: %s",
 			gc.Logging.Level, strings.Join(validLevels, ", "))
+	}
+
+	// Ensure temp directory is set (can be empty to use system default)
+	if gc.TempDir == "" {
+		gc.TempDir = os.TempDir()
 	}
 
 	return nil
