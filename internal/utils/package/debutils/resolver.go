@@ -125,13 +125,20 @@ func ParsePrimary(baseURL string, pkggz string, releaseFile string, releaseSign 
 			pkg.Name = val
 		case "Version":
 			pkg.Version = val
+		case "Pre-Depends":
+			// Split dependencies by comma and trim spaces
+			deps := strings.Split(val, ",")
+			for i := range deps {
+				deps[i] = strings.TrimSpace(deps[i])
+			}
+			pkg.Requires = append(pkg.Requires, deps...)
 		case "Depends":
 			// Split dependencies by comma and trim spaces
 			deps := strings.Split(val, ",")
 			for i := range deps {
 				deps[i] = strings.TrimSpace(deps[i])
 			}
-			pkg.Requires = deps
+			pkg.Requires = append(pkg.Requires, deps...)
 		case "Provides":
 			// Split provides by comma and trim spaces, remove version constraints
 			deps := strings.Split(val, ",")
@@ -321,7 +328,30 @@ func ResolvePackageInfos(requested []provider.PackageInfo, all []provider.Packag
 			if latest != nil {
 				queue = append(queue, *latest)
 			} else if provPkg, ok := byProvides[depName]; ok {
-				queue = append(queue, provPkg)
+				// Find the latest version of provPkg.Name based on provPkg.Version
+				var latestProv *provider.PackageInfo
+				for _, pi := range all {
+					if pi.Name == provPkg.Name {
+						if latestProv == nil {
+							tmp := pi
+							latestProv = &tmp
+						} else {
+							cmp, err := compareDebianVersions(pi.Version, latestProv.Version)
+							if err != nil {
+								return nil, fmt.Errorf("failed to compare versions: %v", err)
+							}
+							if cmp > 0 {
+								tmp := pi
+								latestProv = &tmp
+							}
+						}
+					}
+				}
+				if latestProv != nil {
+					queue = append(queue, *latestProv)
+				} else {
+					queue = append(queue, provPkg)
+				}
 			} else {
 				return nil, fmt.Errorf("dependency %q required by %q not found in repo", depName, cur.Name)
 			}
