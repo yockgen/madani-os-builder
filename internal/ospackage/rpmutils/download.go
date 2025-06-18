@@ -205,8 +205,8 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 	}
 
 	// Extract URLs
-	urls := make([]string, len(needed))
-	for i, pkg := range needed {
+	urls := make([]string, len(sorted_pkgs))
+	for i, pkg := range sorted_pkgs {
 		urls[i] = pkg.URL
 		downloadPkgList = append(downloadPkgList, pkg.Name)
 	}
