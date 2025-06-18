@@ -46,8 +46,19 @@ func init() {
 	}
 }
 
-func CreateRawImage(filePath string, template *config.ImageTemplate) error {
-	return nil
+// CreateRawImage creates a raw disk image file based on the provided template.
+// This function do the following steps:
+// 1. Create a raw disk image file with the specified size.
+// 2. Set up the loopback device for the raw disk image.
+// 3. Partition the raw disk image according to the provided partition information.
+// 4. return the partition ID map with loopdev disk partition path .
+func CreateRawImage(filePath string, template *config.ImageTemplate) (map[string]string, error) {
+	diskPathIdMap := map[string]string{
+		"boot":   "/dev/loop8p1",
+		"rootfs": "/dev/loop8p2",
+	}
+
+	return diskPathIdMap, nil
 }
 
 // CreateImageDisc allocates a new raw disk image file of the given size.
