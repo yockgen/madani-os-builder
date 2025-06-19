@@ -1,6 +1,6 @@
-[toolchain-repo]
-name=Local Toolchain Repo
-baseurl=file:///workspace/local_repo/toolchain_repo
+[cache-repo]
+name=Local Cache Repo
+baseurl=file:///workspace/cache-repo
 enabled=1
 gpgcheck=0
 skip_if_unavailable=1
