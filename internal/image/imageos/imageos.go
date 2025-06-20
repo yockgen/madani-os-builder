@@ -81,9 +81,6 @@ func initChrootInstallRoot(template *config.ImageTemplate) (string, error) {
 	}
 	sysConfigName := template.GetSystemConfigName()
 	installRoot := filepath.Join(chroot.ChrootImageBuildDir, sysConfigName)
-	if _, err := os.Stat(installRoot); err == nil {
-		return installRoot, fmt.Errorf("install root already exists: %s", installRoot)
-	}
 	if _, err := shell.ExecCmd("mkdir -p "+installRoot, true, "", nil); err != nil {
 		return installRoot, fmt.Errorf("failed to create directory %s: %w", installRoot, err)
 	}
@@ -102,7 +99,11 @@ func mountDiskToChroot(installRoot string, diskPathIdMap map[string]string, temp
 				mountPointInfo["Path"] = diskPath
 				mountPointInfo["MountPoint"] = filepath.Join(installRoot, partition.MountPoint)
 				if partition.MountPoint == "/boot/efi" {
-					mountPointInfo["Flags"] = fmt.Sprintf("-t %s -o umask=0077", partition.FsType)
+					if partition.FsType == "fat32" || partition.FsType == "fat16" {
+						mountPointInfo["Flags"] = fmt.Sprintf("-t %s -o umask=0077", "vfat")
+					} else {
+						mountPointInfo["Flags"] = fmt.Sprintf("-t %s -o umask=0077", partition.FsType)
+					}
 				} else {
 					mountPointInfo["Flags"] = fmt.Sprintf("-t %s", partition.FsType)
 				}

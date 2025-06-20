@@ -39,7 +39,7 @@ systemConfigs:
     description: Default yml configuration for raw image
 
     bootloader:
-      type: grub # (grub or systemd-boot)
+      type: systemd-boot # (grub or systemd-boot)
       grub:
         bootType: efi # (efi or legacy)
 
@@ -62,6 +62,7 @@ systemConfigs:
       - irqbalance
       - ncurses-libs
       - openssl
+      - kernel-6.6.92.2-1
       - rpm
       - rpm-libs
       - shadow-utils
@@ -70,6 +71,7 @@ systemConfigs:
       - systemd
       - systemd-networkd
       - systemd-resolved
+      - systemd-ukify
       - systemd-udev
       - tdnf
       - tdnf-plugin-repogpgcheck
@@ -79,6 +81,6 @@ systemConfigs:
 
     kernel:
       name: kernel
-      version: 6.12
+      version: 6.6
       cmdline: "quiet splash"
       uki: true

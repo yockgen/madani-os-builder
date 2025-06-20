@@ -43,7 +43,7 @@ func BuildRawImage(template *config.ImageTemplate) error {
 	filePath := filepath.Join(ImageBuildDir, sysConfigName, fmt.Sprintf("%s.raw", imageName))
 
 	log.Infof("Creating raw image disk...")
-	diskPathIdMap, err := imagedisc.CreateRawImage(filePath, template)
+	loopDevPath, diskPathIdMap, err := imagedisc.CreateRawImage(filePath, template)
 	if err != nil {
 		return fmt.Errorf("failed to create raw image: %w", err)
 	}
@@ -51,6 +51,11 @@ func BuildRawImage(template *config.ImageTemplate) error {
 	err = imageos.InstallImageOs(diskPathIdMap, template)
 	if err != nil {
 		return fmt.Errorf("failed to install image OS: %w", err)
+	}
+
+	err = imagedisc.DetachLoopbackDevice(filePath, loopDevPath)
+	if err != nil {
+		return fmt.Errorf("failed to detach loopback device: %w", err)
 	}
 
 	err = imageconvert.ConvertImageFile(filePath, template)

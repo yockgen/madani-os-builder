@@ -35,6 +35,11 @@ var sizeRegex = regexp.MustCompile(`^(\d+)\s*([A-Z]+)$`)
 func NormalizeSizeToBytes(sizeStr string) (uint64, error) {
 	// Convert the input string to uppercase to make matching case-insensitive.
 	// The regex is also case-insensitive for the unit part.
+
+	if sizeStr == "0" {
+		return 0, nil // Special case for zero size
+	}
+
 	upperSizeStr := strings.ToUpper(sizeStr)
 
 	matches := sizeRegex.FindStringSubmatch(upperSizeStr)

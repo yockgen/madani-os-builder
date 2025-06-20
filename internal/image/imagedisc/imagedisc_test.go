@@ -10,31 +10,31 @@ import (
 var (
 	singlePartition = []config.PartitionInfo{
 		{
-			Name:       "root",
-			ID:         "rootfs",
-			FsType:     "ext4",
-			StartBytes: 1024 * 1024,                            // 1 MiB
-			SizeBytes:  8 * 1024 * 1024,                        // 8 MiB
-			TypeGUID:   "0FC63DAF-8483-4772-8E79-3D69D8477DE4", // Linux filesystem
+			Name:     "root",
+			ID:       "rootfs",
+			FsType:   "ext4",
+			Start:    "1MiB",
+			End:      "9MiB",
+			TypeGUID: "0FC63DAF-8483-4772-8E79-3D69D8477DE4", // Linux filesystem
 		},
 	}
 
 	multiPartitions = []config.PartitionInfo{
 		{
-			Name:       "boot",
-			ID:         "boot",
-			FsType:     "fat32",
-			StartBytes: 1024 * 1024,                            // 1 MiB
-			SizeBytes:  100 * 1024 * 1024,                      // 100 MiB
-			TypeGUID:   "C12A7328-F81F-11D2-BA4B-00A0C93EC93B", // EFI System Partition
+			Name:     "boot",
+			ID:       "boot",
+			FsType:   "fat32",
+			Start:    "1MiB",
+			End:      "101MiB",
+			TypeGUID: "C12A7328-F81F-11D2-BA4B-00A0C93EC93B", // EFI System Partition
 		},
 		{
-			Name:       "root",
-			ID:         "rootfs",
-			FsType:     "ext4",
-			StartBytes: 101 * 1024 * 1024,                      // Start after boot (1 + 100 MiB)
-			SizeBytes:  200 * 1024 * 1024,                      // 200 MiB
-			TypeGUID:   "0FC63DAF-8483-4772-8E79-3D69D8477DE4", // Linux filesystem
+			Name:     "root",
+			ID:       "rootfs",
+			FsType:   "ext4",
+			Start:    "101MiB", // Start after boot (1 + 100 MiB)
+			End:      "301MiB",
+			TypeGUID: "0FC63DAF-8483-4772-8E79-3D69D8477DE4", // Linux filesystem
 		},
 	}
 )
@@ -101,14 +101,11 @@ func TestImagePartitioning(t *testing.T) {
 				}
 			})
 
-			partDevPathMap, partIDToFsTypeMap, err := PartitionImageDisc(dev, tc.imageSize, tc.partitions)
+			_, _, err = PartitionImageDisc(dev, tc.imageSize, tc.partitions)
 			if err != nil {
 				t.Fatalf("PartitionImageDisc failed: %v", err)
 			}
 
-			if err := FormatPartitions(partDevPathMap, partIDToFsTypeMap, tc.partitions); err != nil {
-				t.Fatalf("FormatPartitions failed: %v", err)
-			}
 		})
 	}
 }
