@@ -32,6 +32,7 @@ func initRawMakerWorkspace() error {
 }
 
 func BuildRawImage(template *config.ImageTemplate) error {
+	var err error
 	log := logger.Logger()
 	log.Infof("Building raw image for: %s", template.GetImageName())
 
@@ -45,12 +46,18 @@ func BuildRawImage(template *config.ImageTemplate) error {
 	log.Infof("Creating raw image disk...")
 	loopDevPath, diskPathIdMap, err := imagedisc.CreateRawImage(filePath, template)
 	if err != nil {
-		return fmt.Errorf("failed to create raw image: %w", err)
+		err = fmt.Errorf("failed to create raw image: %w", err)
+		if loopDevPath != "" {
+			goto fail
+		} else {
+			return err
+		}
 	}
 
 	err = imageos.InstallImageOs(diskPathIdMap, template)
 	if err != nil {
-		return fmt.Errorf("failed to install image OS: %w", err)
+		err = fmt.Errorf("failed to install image OS: %w", err)
+		goto fail
 	}
 
 	err = imagedisc.DetachLoopbackDevice(filePath, loopDevPath)
@@ -63,4 +70,11 @@ func BuildRawImage(template *config.ImageTemplate) error {
 		return fmt.Errorf("failed to convert image file: %w", err)
 	}
 	return nil
+
+fail:
+	detachErr := imagedisc.DetachLoopbackDevice(filePath, loopDevPath)
+	if detachErr != nil {
+		log.Errorf("Failed to detach loopback device after error: %v", detachErr)
+	}
+	return fmt.Errorf("error during raw image build: %w", err)
 }
