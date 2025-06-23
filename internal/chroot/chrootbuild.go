@@ -165,7 +165,6 @@ func importGpgKeys(targetOs string, chrootEnvBuildPath string) error {
 }
 
 func BuildChrootEnv(targetOs string, targetDist string, targetArch string) error {
-	installComplete := true
 	log := logger.Logger()
 	err := InitChrootBuildSpace(targetOs, targetDist, targetArch)
 	if err != nil {
@@ -198,30 +197,30 @@ func BuildChrootEnv(targetOs string, targetDist string, targetArch string) error
 
 	for _, pkg := range allPkgsList {
 		pkgPath := filepath.Join(ChrootPkgCacheDir, pkg)
-		if _, err := os.Stat(pkgPath); os.IsNotExist(err) {
-			log.Errorf("package %s does not exist in cache directory", pkg)
-			break
+		if _, err = os.Stat(pkgPath); os.IsNotExist(err) {
+			err = fmt.Errorf("package %s does not exist in cache directory: %v", pkg, err)
+			goto fail
 		}
 		log.Infof("Installing package %s in chroot environment", pkg)
 		cmdStr := fmt.Sprintf("rpm -i -v --nodeps --noorder --force --root %s --define '_dbpath /var/lib/rpm' %s",
 			chrootEnvPath, pkgPath)
-		output, err := shell.ExecCmd(cmdStr, true, "", nil)
+		var output string
+		output, err = shell.ExecCmd(cmdStr, true, "", nil)
 		if err != nil {
-			installComplete = false
-			log.Errorf("Failed to install package %s: %v, output: %s", pkg, err, output)
-			break
+			err = fmt.Errorf("failed to install package %s: %v, output: %s", pkg, err, output)
+			goto fail
 		}
 	}
 
-	if installComplete {
-		err = updateRpmDB(chrootEnvPath, allPkgsList)
-		if err != nil {
-			log.Errorf("failed to update RPM database in chroot environment: %v", err)
-		}
-		err = importGpgKeys(targetOs, chrootEnvPath)
-		if err != nil {
-			log.Errorf("failed to import GPG keys in chroot environment: %v", err)
-		}
+	err = updateRpmDB(chrootEnvPath, allPkgsList)
+	if err != nil {
+		err = fmt.Errorf("failed to update RPM database in chroot environment: %v", err)
+		goto fail
+	}
+	err = importGpgKeys(targetOs, chrootEnvPath)
+	if err != nil {
+		err = fmt.Errorf("failed to import GPG keys in chroot environment: %v", err)
+		goto fail
 	}
 
 	err = mount.UmountSysfs(chrootEnvPath)
@@ -233,17 +232,35 @@ func BuildChrootEnv(targetOs string, targetDist string, targetArch string) error
 		return fmt.Errorf("failed to clean system directories in chroot environment: %v", err)
 	}
 
-	if installComplete {
-		if err = compression.CompressFolder(chrootEnvPath, chrootTarPath, "tar.gz", true); err != nil {
-			return fmt.Errorf("failed to compress chroot environment: %v", err)
-		}
-		log.Infof("Chroot environment build completed successfully")
-		_, err = shell.ExecCmd("rm -rf "+chrootEnvPath, true, "", nil)
-		return err
-	} else {
-		log.Errorf("Chroot environment build failed, some packages may not have been installed correctly")
-		return fmt.Errorf("chroot environment build failed, some packages may not have been installed correctly")
+	if err = compression.CompressFolder(chrootEnvPath, chrootTarPath, "tar.gz", true); err != nil {
+		return fmt.Errorf("failed to compress chroot environment: %v", err)
 	}
+
+	log.Infof("Chroot environment build completed successfully")
+
+	if _, err = shell.ExecCmd("rm -rf "+chrootEnvPath, true, "", nil); err != nil {
+		return fmt.Errorf("failed to remove chroot environment build path: %v", err)
+	}
+
+	return nil
+
+fail:
+	if err := mount.UmountSysfs(chrootEnvPath); err != nil {
+		log.Errorf("failed to unmount system directories in chroot environment: %v", err)
+	} else {
+		log.Infof("Unmounted system directories in chroot environment: %s", chrootEnvPath)
+	}
+	if err := mount.CleanSysfs(chrootEnvPath); err != nil {
+		log.Errorf("failed to clean system directories in chroot environment: %v", err)
+	} else {
+		log.Infof("Cleaned system directories in chroot environment: %s", chrootEnvPath)
+	}
+	if _, err := shell.ExecCmd("rm -rf "+chrootEnvPath, true, "", nil); err != nil {
+		log.Errorf("failed to remove chroot environment build path: %v", err)
+	} else {
+		log.Infof("Removed chroot environment build path: %s", chrootEnvPath)
+	}
+	return fmt.Errorf("chroot environment build failed: %v", err)
 }
 
 func CleanChrootBuild(targetOs string, targetDist string, targetArch string) error {
