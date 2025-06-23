@@ -17,6 +17,7 @@ import (
 )
 
 func InstallImageOs(diskPathIdMap map[string]string, template *config.ImageTemplate) error {
+	var err error
 	log := logger.Logger()
 	log.Infof("Installing OS for image: %s", template.GetImageName())
 
@@ -31,41 +32,57 @@ func InstallImageOs(diskPathIdMap map[string]string, template *config.ImageTempl
 	}
 
 	log.Infof("Image installation pre-processing...")
-	if err = preImageOsInstall(installRoot, template); err != nil {
-		return fmt.Errorf("pre-install failed: %w", err)
+	err = preImageOsInstall(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("pre-install failed: %w", err)
+		goto fail
 	}
 
 	log.Infof("Image package installation...")
-	if err = installImagePkgs(installRoot, template); err != nil {
-		return fmt.Errorf("failed to install image packages: %w", err)
+	err = installImagePkgs(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("failed to install image packages: %w", err)
+		goto fail
 	}
 
 	log.Infof("Image system configuration...")
-	if err = updateImageConfig(installRoot, template); err != nil {
-		return fmt.Errorf("failed to update image config: %w", err)
+	err = updateImageConfig(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("failed to update image config: %w", err)
+		goto fail
 	}
 
 	log.Infof("Installing bootloader...")
-	if err = imageboot.InstallImageBoot(diskPathIdMap, template); err != nil {
-		return fmt.Errorf("failed to install image boot: %w", err)
+	err = imageboot.InstallImageBoot(diskPathIdMap, template)
+	if err != nil {
+		err = fmt.Errorf("failed to install image boot: %w", err)
+		goto fail
 	}
 
-	if err = imagesecure.ConfigImageSecurity(installRoot, template); err != nil {
-		return fmt.Errorf("failed to configure image security: %w", err)
+	err = imagesecure.ConfigImageSecurity(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("failed to configure image security: %w", err)
+		goto fail
 	}
 
 	log.Infof("Configuring UKI...")
-	if err = buildImageUKI(installRoot, template); err != nil {
-		return fmt.Errorf("failed to configure UKI: %w", err)
+	err = buildImageUKI(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("failed to configure UKI: %w", err)
+		goto fail
 	}
 
-	if err = imagesign.SignImage(installRoot, template); err != nil {
-		return fmt.Errorf("failed to sign image: %w", err)
+	err = imagesign.SignImage(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("failed to sign image: %w", err)
+		goto fail
 	}
 
 	log.Infof("Image installation post-processing...")
-	if err = postImageOsInstall(installRoot, template); err != nil {
-		return fmt.Errorf("post-install failed: %w", err)
+	err = postImageOsInstall(installRoot, template)
+	if err != nil {
+		err = fmt.Errorf("post-install failed: %w", err)
+		goto fail
 	}
 
 	if err = umountDiskFromChroot(mountPointInfoList); err != nil {
@@ -73,6 +90,12 @@ func InstallImageOs(diskPathIdMap map[string]string, template *config.ImageTempl
 	}
 
 	return nil
+
+fail:
+	if umountErr := umountDiskFromChroot(mountPointInfoList); umountErr != nil {
+		log.Errorf("Failed to unmount disk from chroot after error: %v", umountErr)
+	}
+	return fmt.Errorf("image OS installation failed: %w", err)
 }
 
 func initChrootInstallRoot(template *config.ImageTemplate) (string, error) {
