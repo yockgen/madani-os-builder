@@ -5,6 +5,7 @@ go 1.22.12
 require (
 	github.com/ProtonMail/go-crypto v1.2.0
 	github.com/cavaliergopher/rpm v1.3.0
+	github.com/klauspost/compress v1.18.0
 	github.com/microsoft/azurelinux/toolkit/tools v0.0.0-20250402013339-39cc18a4a03f
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/schollz/progressbar/v3 v3.12.0
