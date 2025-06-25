@@ -180,7 +180,12 @@ func UmountSysfs(mountPoint string) error {
 		fullPath := filepath.Join(mountPoint, _mountPoint)
 		if slice.Contains(pathList, fullPath) {
 			if _, err := shell.ExecCmd("umount -lR "+fullPath, true, "", nil); err != nil {
-				return fmt.Errorf("failed to unmount %s: %w", fullPath, err)
+				// Only treat as error if not "not found"
+				if !strings.Contains(err.Error(), "not found") {
+					return fmt.Errorf("failed to unmount %s: %w", fullPath, err)
+				} else {
+					log.Warnf("Mount point not found (already unmounted?): %s", fullPath)
+				}
 			} else {
 				log.Debugf("Unmounted: %s", fullPath)
 			}
