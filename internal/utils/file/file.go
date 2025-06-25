@@ -55,6 +55,18 @@ func GetRootPath() (string, error) {
 	return rootPath, nil
 }
 
+func GetGeneralConfigDir() (string, error) {
+	rootPath, err := GetRootPath()
+	if err != nil {
+		return "", fmt.Errorf("failed to get root path: %w", err)
+	}
+	configDir := filepath.Join(rootPath, "config", "general")
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("general config directory does not exist: %s", configDir)
+	}
+	return configDir, nil
+}
+
 func GetTargetOsConfigDir(targetOs, targetDist string) (string, error) {
 	rootPath, err := GetRootPath()
 	if err != nil {
@@ -65,6 +77,18 @@ func GetTargetOsConfigDir(targetOs, targetDist string) (string, error) {
 		return "", fmt.Errorf("target OS config directory does not exist: %s", configDir)
 	}
 	return configDir, nil
+}
+
+// Append appends a string to the end of file dst.
+func Append(data string, dst string) error {
+	dstFile, err := os.OpenFile(dst, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open file %s for appending: %w", dst, err)
+	}
+	defer dstFile.Close()
+
+	_, err = dstFile.WriteString(data)
+	return err
 }
 
 // ReadFromJSON reads a JSON file and returns its contents as a map
