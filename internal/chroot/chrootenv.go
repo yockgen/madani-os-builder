@@ -60,6 +60,11 @@ func UmountChrootSysfs(chrootPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
+
+	if err := StopGPGComponents(chrootHostPath); err != nil {
+		return fmt.Errorf("failed to stop GPG components in chroot environment: %w", err)
+	}
+
 	if err = mount.UmountSysfs(chrootHostPath); err != nil {
 		return fmt.Errorf("failed to unmount sysfs for %s: %w", chrootHostPath, err)
 	}
@@ -270,11 +275,40 @@ fail:
 	return fmt.Errorf("failed to initialize chroot environment: %w", err)
 }
 
+func StopGPGComponents(chrootPath string) error {
+	log := logger.Logger()
+	cmdExist, err := shell.IsCommandExist("gpgconf", chrootPath)
+	if err != nil {
+		return fmt.Errorf("failed to check if gpgconf command exists in chroot environment: %w", err)
+	}
+	if !cmdExist {
+		log.Debugf("gpgconf command not found in chroot environment, skipping GPG components stop")
+		return nil
+	}
+	output, err := shell.ExecCmd("gpgconf --list-components", true, chrootPath, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list GPG components in chroot environment: %w", err)
+	}
+	for _, line := range strings.Split(output, "\n") {
+		component := strings.TrimSpace(strings.Split(line, ":")[0])
+		if component == "gpg-agent" || component == "keyboxd" {
+			log.Debugf("Stopping GPG component: %s", component)
+			if _, err := shell.ExecCmd("gpgconf --kill "+component, true, chrootPath, nil); err != nil {
+				return fmt.Errorf("failed to stop GPG component %s: %w", component, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func CleanupChrootEnv(targetOs, targetDist, targetArch string) error {
 	log := logger.Logger()
 	if _, err := os.Stat(ChrootEnvRoot); err == nil {
-		err := mount.UmountSubPath(ChrootEnvRoot)
-		if err != nil {
+		if err := StopGPGComponents(ChrootEnvRoot); err != nil {
+			return fmt.Errorf("failed to stop GPG components in chroot environment: %w", err)
+		}
+		if err := mount.UmountSubPath(ChrootEnvRoot); err != nil {
 			return fmt.Errorf("failed to unmount path for chroot environment: %w", err)
 		}
 	} else {

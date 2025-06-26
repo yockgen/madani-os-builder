@@ -154,8 +154,28 @@ func DetachLoopbackDevice(diskPath string, loopDevPath string) error {
 		return fmt.Errorf("failed to detach loopback device: %w", err)
 	}
 
+	// Wait for the loopback device to be detached
+	if err := waitForLoopbackToDetach(diskPath, loopDevPath); err != nil {
+		return fmt.Errorf("failed to wait for loopback detach: %w", err)
+	}
+
 	log.Infof("Loopback device %s detached successfully from %s", diskPath, loopDevPath)
 
+	return nil
+}
+
+// WaitForLoopbackDetach waits for the loopback device to be detached.
+func waitForLoopbackToDetach(diskPath string, loopDevPath string) error {
+	log := utils.Logger()
+	log.Debugf("Waiting for loopback device %s to be detached from %s", diskPath, loopDevPath)
+	// Validate the loop device path
+	if diskPath == "" || loopDevPath == "" {
+		return fmt.Errorf("invalid loop device or device path")
+	}
+	// Call the Azure diskutils to wait for the loopback device to be detached
+	if err := diskutils.WaitForLoopbackToDetach(loopDevPath, diskPath); err != nil {
+		return fmt.Errorf("failed to wait for loopback detach: %w", err)
+	}
 	return nil
 }
 

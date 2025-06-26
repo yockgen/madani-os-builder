@@ -46,6 +46,7 @@ var commandMap = map[string]string{
 	"find":               "/usr/bin/find",
 	"findmnt":            "/usr/bin/findmnt",
 	"flock":              "/usr/bin/flock",
+	"gpgconf":            "/usr/bin/gpgconf",
 	"gunzip":             "/usr/bin/gunzip",
 	"grep":               "/usr/bin/grep",
 	"grub2-mkconfig":     "/usr/sbin/grub2-mkconfig",
@@ -126,20 +127,25 @@ func GetOSProxyEnvirons() map[string]string {
 }
 
 // IsCommandExist checks if a command exists in the system or in a chroot environment
-func IsCommandExist(cmd string, chrootPath string) bool {
+func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 	var cmdStr string
+	log := logger.Logger()
 	if chrootPath != HostPath {
-		cmdStr = "sudo chroot " + chrootPath + " command -v " + cmd
+		cmdStr = "sudo chroot " + chrootPath + " /bin/sh -c 'command -v " + cmd + "'"
 	} else {
 		cmdStr = "command -v " + cmd
 	}
 
-	output, _ := exec.Command("bash", "-c", cmdStr).Output()
+	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	if err != nil {
+		log.Errorf("failed to execute command %s: output %s, err %v", cmdStr, output, err)
+		return false, fmt.Errorf("failed to execute command %s: %w", cmdStr, err)
+	}
 	output = bytes.TrimSpace(output)
 	if len(output) == 0 {
-		return false
+		return false, nil
 	} else {
-		return true
+		return true, nil
 	}
 }
 
@@ -244,7 +250,9 @@ func ExecCmd(cmdStr string, sudo bool, chrootPath string, envVal []string) (stri
 
 	if err != nil {
 		if outputStr != "" {
-			log.Infof(outputStr)
+			log.Errorf("failed to exec %s: output %s, err %v", fullCmdStr, outputStr, err)
+		} else {
+			log.Errorf("failed to exec %s: %v", fullCmdStr, err)
 		}
 		return outputStr, fmt.Errorf("failed to exec %s: %w", fullCmdStr, err)
 	} else {
