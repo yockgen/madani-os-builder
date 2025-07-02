@@ -12,10 +12,10 @@ and Wind River eLxr.
 
 ## Documentation
 
-- [?? CLI Specification](./docs/architecture/image-composer-cli-specification.md) - Complete command-line reference and usage guide
-- [?? Build Process](./docs/architecture/image-composer-build-process.md) - Understanding the five-stage build pipeline Details on the five-stage build pipeline
-- [? Caching](./docs/architecture/image-composer-caching.md) - Package and image caching for performance Explanations on package cache and image cache to improve build performance and reduce resource usage
-- [?? Templates](./docs/architecture/image-composer-templates.md) - Creating and using reusable image templates Explanations on how to create and reuse image templates
+- [📖 CLI Specification](./docs/architecture/image-composer-cli-specification.md) - Complete command-line reference and usage guide
+- [🔧 Build Process](./docs/architecture/image-composer-build-process.md) - Details on the five-stage build pipeline
+- [⚡ Caching](./docs/architecture/image-composer-caching.md) - Explanations on package cache and image cache to improve build performance and reduce resource usage
+- [📋 Templates](./docs/architecture/image-composer-templates.md) - Explanations on how to create and reuse image templates
 
 ## Quick Start
 
