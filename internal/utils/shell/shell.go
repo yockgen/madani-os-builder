@@ -148,16 +148,15 @@ func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 	}
 
 	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	output = bytes.TrimSpace(output)
 	if err != nil {
+		if len(output) == 0 {
+			return false, nil
+		}
 		log.Errorf("failed to execute command %s: output %s, err %v", cmdStr, output, err)
 		return false, fmt.Errorf("failed to execute command %s: %w", cmdStr, err)
 	}
-	output = bytes.TrimSpace(output)
-	if len(output) == 0 {
-		return false, nil
-	} else {
-		return true, nil
-	}
+	return true, nil
 }
 
 func verifyCmdWithFullPath(cmd string) (string, error) {
