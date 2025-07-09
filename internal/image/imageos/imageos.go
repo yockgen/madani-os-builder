@@ -75,13 +75,6 @@ func InstallImageOs(diskPathIdMap map[string]string, template *config.ImageTempl
 		goto fail
 	}
 
-	log.Infof("Configuring User...")
-	err = createUser(installRoot, template)
-	if err != nil {
-		err = fmt.Errorf("failed to configuring User: %w", err)
-		goto fail
-	}
-
 	err = imagesign.SignImage(installRoot, template)
 	if err != nil {
 		err = fmt.Errorf("failed to sign image: %w", err)
@@ -284,6 +277,12 @@ func updateImageHostname(installRoot string, template *config.ImageTemplate) err
 }
 
 func updateImageUsrGroup(installRoot string, template *config.ImageTemplate) error {
+	log := logger.Logger()
+	log.Infof("Configuring User...")
+	err := createUser(installRoot, template)
+	if err != nil {
+		return fmt.Errorf("failed to configuring User: %w", err)
+	}
 	return nil
 }
 
@@ -504,8 +503,13 @@ func createUser(installRoot string, template *config.ImageTemplate) error {
 	// Create the user with useradd command
 	// -m creates home directory, -s sets shell
 	cmd := fmt.Sprintf("useradd -m -s /bin/bash %s", user)
-	if _, err := shell.ExecCmd(cmd, true, installRoot, nil); err != nil {
-		return fmt.Errorf("failed to create user %s: %w", user, err)
+	output, err := shell.ExecCmd(cmd, true, installRoot, nil)
+	if err != nil {
+		if strings.Contains(output, "already exists") {
+			log.Warnf("User %s already exists", user)
+		} else {
+			return fmt.Errorf("failed to create user %s: %w", user, err)
+		}
 	}
 
 	// Set password using passwd command with expect-like approach
