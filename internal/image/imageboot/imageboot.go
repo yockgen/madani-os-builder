@@ -2,7 +2,6 @@ package imageboot
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/open-edge-platform/image-composer/internal/config"
@@ -23,21 +22,6 @@ func getDiskPartDevByMountPoint(mountPoint string, diskPathIdMap map[string]stri
 		}
 	}
 	return ""
-}
-
-func copyFile(src, dst string) error {
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return fmt.Errorf("source file does not exist: %s", src)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return fmt.Errorf("failed to create directory for destination file: %w", err)
-	}
-
-	if _, err := shell.ExecCmd("cp "+src+" "+dst, true, "", nil); err != nil {
-		return fmt.Errorf("failed to copy file from %s to %s: %w", src, dst, err)
-	}
-	return nil
 }
 
 func replacePlaceholdersInFile(placeholder, value, filePath string) error {
@@ -66,7 +50,7 @@ func installGrubWithEfiMode(installRoot, bootUUID, bootPrefix string, template *
 	grubAssetPath := filepath.Join(configDir, "image", "efi", "grub", "grub.cfg")
 	grubFinalPath := filepath.Join(installRoot, efiDir, "boot/grub2/grub.cfg")
 
-	if err = copyFile(grubAssetPath, grubFinalPath); err != nil {
+	if err = file.CopyFile(grubAssetPath, grubFinalPath, "", true); err != nil {
 		return fmt.Errorf("failed to copy grub configuration file: %w", err)
 	}
 
@@ -104,7 +88,7 @@ func copyGrubEnvFile(installRoot string) error {
 	}
 	grubEnvAssetPath := filepath.Join(configDir, "image", "grub2", "grubenv")
 	grubEnvFinalPath := filepath.Join(installRoot, "boot", "grub2", "grubenv")
-	if err = copyFile(grubEnvAssetPath, grubEnvFinalPath); err != nil {
+	if err = file.CopyFile(grubEnvAssetPath, grubEnvFinalPath, "", true); err != nil {
 		return fmt.Errorf("failed to copy grubenv file: %w", err)
 	}
 	return nil
@@ -135,13 +119,13 @@ func updateBootConfigTemplate(installRoot, rootDevID, bootUUID, bootPrefix strin
 	case "grub":
 		configAssetPath = filepath.Join(configDir, "image", "grub2", "grub")
 		configFinalPath = filepath.Join(installRoot, "etc", "default", "grub")
-		if err = copyFile(configAssetPath, configFinalPath); err != nil {
+		if err = file.CopyFile(configAssetPath, configFinalPath, "", true); err != nil {
 			return fmt.Errorf("failed to copy boot configuration file: %w", err)
 		}
 	case "systemd-boot":
 		configAssetPath = filepath.Join(configDir, "image", "efi", "bootParams.conf")
 		configFinalPath = filepath.Join(installRoot, "boot", "cmdline.conf")
-		if err = copyFile(configAssetPath, configFinalPath); err != nil {
+		if err = file.CopyFile(configAssetPath, configFinalPath, "", true); err != nil {
 			return fmt.Errorf("failed to copy boot configuration file: %w", err)
 		}
 	default:

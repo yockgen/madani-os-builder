@@ -101,11 +101,7 @@ func CopyFileFromHostToChroot(hostFilePath, chrootPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
-	cmd := "cp -f " + hostFilePath + " " + chrootHostPath
-	if _, err = shell.ExecCmd(cmd, true, "", nil); err != nil {
-		return fmt.Errorf("failed to copy file from host to chroot: %w", err)
-	}
-	return nil
+	return file.CopyFile(hostFilePath, chrootHostPath, "-f", true)
 }
 
 // CopyFileFromChrootToHost copies a file from the chroot environment to the host
@@ -114,11 +110,7 @@ func CopyFileFromChrootToHost(hostFilePath, chrootPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
-	cmd := "cp -f " + chrootHostPath + " " + hostFilePath
-	if _, err = shell.ExecCmd(cmd, true, "", nil); err != nil {
-		return fmt.Errorf("failed to copy file from chroot to host: %w", err)
-	}
-	return nil
+	return file.CopyFile(chrootHostPath, hostFilePath, "-f", true)
 }
 
 func updateChrootLocalRPMRepo(chrootRepoDir string) error {
