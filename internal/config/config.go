@@ -50,11 +50,18 @@ type Bootloader struct {
 
 // SystemConfig represents a system configuration within the template
 type SystemConfig struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description"`
-	Bootloader  Bootloader   `yaml:"bootloader"`
-	Packages    []string     `yaml:"packages"`
-	Kernel      KernelConfig `yaml:"kernel"`
+	Name            string               `yaml:"name"`
+	Description     string               `yaml:"description"`
+	Bootloader      Bootloader           `yaml:"bootloader"`
+	Packages        []string             `yaml:"packages"`
+	AdditionalFiles []AdditionalFileInfo `yaml:"additionalFiles"`
+	Kernel          KernelConfig         `yaml:"kernel"`
+}
+
+// AdditionalFileInfo holds information about local file and final path to be placed in the image
+type AdditionalFileInfo struct {
+	Local string `yaml:"local"` // path to the file on the host system
+	Final string `yaml:"final"` // path where the file should be placed in the image
 }
 
 // KernelConfig holds the kernel configuration
