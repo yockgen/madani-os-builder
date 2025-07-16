@@ -28,8 +28,8 @@ jobs:
 
       - name: Run build-tester
         run: |
-          echo "Starting build-tester.sh..."
-          ./build-tester.sh
+          echo "Starting validate.sh..."
+          ./validate.sh
           echo "Build and tests completed."
 
       - name: Notify PR author on failure
