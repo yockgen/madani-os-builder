@@ -94,6 +94,10 @@ func createOverlayMntSvc(installRoot string) error {
 		"",
 		"# Mount overlay",
 		"mount -t overlay overlay -o lowerdir=/ro/etc,upperdir=/opt/overlay/etc/upper,workdir=/opt/overlay/etc/work /etc",
+		"",
+		"# Bind-mount persistent /var and /home",
+		"mount --bind /opt/var /var",
+		"mount --bind /opt/home /home",
 	}
 	scriptContent := strings.Join(scriptLines, "\n") + "\n"
 
@@ -145,8 +149,8 @@ func updateImageFstab(installRoot string) error {
 
 	lines := []string{
 		"", // An empty string for the blank line
-		"/opt/var/log /var/log none bind 0 0",
-		"/opt/var/lib /var/lib none bind 0 0",
+		"/opt/var /var none bind 0 0",
+		"/opt/home /home none bind 0 0",
 		"", // An empty string for the blank line
 		"tmpfs /tmp tmpfs mode=1777,nosuid,nodev 0 0",
 		"tmpfs /run tmpfs mode=0755,nosuid,nodev 0 0",
@@ -169,6 +173,8 @@ func prepareOverlayDir(installRoot string) (string, error) {
 		"/opt/overlay/etc/upper",
 		"/opt/overlay/etc/work",
 		"/ro/etc",
+		"/opt/var",
+		"/opt/home",
 	}
 
 	// Create required overlay directories
