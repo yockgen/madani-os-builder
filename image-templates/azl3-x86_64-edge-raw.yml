@@ -8,9 +8,6 @@ target:
   arch: x86_64 # Target OS architecture
   imageType: raw # Image type, valid value: [raw, iso].
 
-immutability:
-  enabled: true # default is false
-
 # Disk configuration can be omitted to use defaults from default template
 # If specified, it will override the default disk configuration completely
 
@@ -18,6 +15,9 @@ immutability:
 systemConfig:
   name: edge
   description: Default yml configuration for edge image
+
+  immutability:
+    enabled: true # default is false
 
   # Package Configuration
   packages:

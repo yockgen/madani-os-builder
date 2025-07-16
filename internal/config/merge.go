@@ -98,16 +98,13 @@ func MergeConfigurations(userTemplate, defaultTemplate *ImageTemplate) (*ImageTe
 	// Target section - always use user values (these should be consistent)
 	mergedTemplate.Target = userTemplate.Target
 
-	// Immutability configuration - merge intelligently
-	mergedTemplate.Immutability = mergeImmutabilityConfig(defaultTemplate.Immutability, userTemplate.Immutability)
-
 	// Disk configuration - simple override if user provides one
 	if !isEmptyDiskConfig(userTemplate.Disk) {
 		mergedTemplate.Disk = userTemplate.Disk
 		log.Debugf("User disk config overrides default")
 	}
 
-	// System configuration - merge intelligently
+	// System configuration - merge intelligently (includes immutability)
 	if !isEmptySystemConfig(userTemplate.SystemConfig) {
 		mergedTemplate.SystemConfig = mergeSystemConfig(defaultTemplate.SystemConfig, userTemplate.SystemConfig)
 		log.Debugf("Merged system config: %s", mergedTemplate.SystemConfig.Name)
@@ -126,7 +123,7 @@ func MergeConfigurations(userTemplate, defaultTemplate *ImageTemplate) (*ImageTe
 	}
 
 	log.Debugf("Merged template: name=%s, systemConfig=%s, immutability=%t",
-		mergedTemplate.Image.Name, mergedTemplate.SystemConfig.Name, mergedTemplate.Immutability.Enabled)
+		mergedTemplate.Image.Name, mergedTemplate.SystemConfig.Name, mergedTemplate.IsImmutabilityEnabled())
 
 	return &mergedTemplate, nil
 }
@@ -143,6 +140,9 @@ func mergeSystemConfig(defaultConfig, userConfig SystemConfig) SystemConfig {
 		merged.Description = userConfig.Description
 	}
 
+	// Merge immutability config
+	merged.Immutability = mergeImmutabilityConfig(defaultConfig.Immutability, userConfig.Immutability)
+
 	// Merge bootloader config
 	if !isEmptyBootloader(userConfig.Bootloader) {
 		merged.Bootloader = mergeBootloader(defaultConfig.Bootloader, userConfig.Bootloader)
@@ -155,6 +155,20 @@ func mergeSystemConfig(defaultConfig, userConfig SystemConfig) SystemConfig {
 
 	// Merge kernel config
 	merged.Kernel = mergeKernelConfig(defaultConfig.Kernel, userConfig.Kernel)
+
+	return merged
+}
+
+// mergeImmutabilityConfig merges immutability configurations
+func mergeImmutabilityConfig(defaultImmutability, userImmutability ImmutabilityConfig) ImmutabilityConfig {
+	merged := defaultImmutability // Start with default
+
+	// User configuration takes precedence
+	// If user explicitly sets enabled (either true or false), use that value
+	// Otherwise, keep the default value
+	if userImmutability.Enabled != defaultImmutability.Enabled {
+		merged.Enabled = userImmutability.Enabled
+	}
 
 	return merged
 }
@@ -261,26 +275,3 @@ func LoadAndMergeTemplate(templatePath string) (*ImageTemplate, error) {
 
 	return mergedTemplate, nil
 }
-
-// mergeImmutabilityConfig merges immutability configurations
-func mergeImmutabilityConfig(defaultImmutability, userImmutability ImmutabilityConfig) ImmutabilityConfig {
-	merged := defaultImmutability // Start with default
-
-	// User configuration takes precedence
-	// If user explicitly sets enabled (either true or false), use that value
-	// Otherwise, keep the default value
-	if userImmutability.Enabled != defaultImmutability.Enabled {
-		merged.Enabled = userImmutability.Enabled
-	}
-
-	return merged
-}
-
-/* Commented to avoid lint errors. Enable if needed
-// isEmptyImmutabilityConfig checks if immutability configuration is effectively empty
-func isEmptyImmutabilityConfig(immutability ImmutabilityConfig) bool {
-	// Since bool has a zero value of false, we consider it "empty" if it's false
-	// This allows users to explicitly set it to false to override a default true
-	return !immutability.Enabled
-}
-*/
