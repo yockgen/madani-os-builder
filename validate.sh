@@ -14,11 +14,16 @@ run_qemu_boot_test() {
   ORIGINAL_IMAGE="azl3-default-x86_64.raw"
   COPY_IMAGE="/tmp/azl3-test.raw"
 
-  cd tmp/image-composer/azure-linux-azl3-x86_64/imagebuild/Default
   echo "Booting image: $IMAGE "
   echo "Current working dir: $(pwd)"
+  if [ -f "$ORIGINAL_IMAGE" ]; then
+    echo "✅ Found image file, copying to /tmp..."
+    cp "$ORIGINAL_IMAGE" "$COPY_IMAGE" 
+  else
+    echo "❌ File '$ORIGINAL_IMAGE' not found in $(pwd)"
+    exit 1
+  fi
   
-  cp "$ORIGINAL_IMAGE" "$COPY_IMAGE" 
   sudo bash -c "touch '$LOGFILE' && chmod 666 '$LOGFILE'"
 
 sudo bash -c '
