@@ -42,6 +42,7 @@ run_qemu_boot_test() {
       > "'$LOGFILE'" 2>&1 &
 
     qemu_pid=$!
+    ps aux | grep QEMU
     echo "QEMU launched as root with PID $qemu_pid"
 
     # Wait for SUCCESS_STRING or timeout
