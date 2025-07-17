@@ -31,6 +31,7 @@ run_qemu_boot_test() {
 
   
 
+  echo "Current working dir: $(pwd)"
   nohup qemu-system-x86_64 \
       -m 2048 \
       -enable-kvm \
@@ -45,6 +46,7 @@ run_qemu_boot_test() {
     qemu_pid=$!
     cd "$ORIGINAL_DIR"
     echo "QEMU launched as root with PID $qemu_pid"
+    echo "Current working dir: $(pwd)"
 
     # Wait for SUCCESS_STRING or timeout
       timeout=30
