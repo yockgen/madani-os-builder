@@ -14,6 +14,7 @@ run_qemu_boot_test() {
   touch '$LOGFILE' && chmod 666 '$LOGFILE'
 
 
+  ORIGINAL_DIR=$(pwd)
   echo "Booting image: $IMAGE "
   # Search under the directory and copy the file to /tmp
   rm -f $COPY_IMAGE
