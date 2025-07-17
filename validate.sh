@@ -29,8 +29,7 @@ run_qemu_boot_test() {
 
   sudo bash -c "touch '$LOGFILE' && chmod 666 '$LOGFILE'"
 
-  sudo bash -c '
-    nohup qemu-system-x86_64 \
+  nohup qemu-system-x86_64 \
       -m 2048 \
       -enable-kvm \
       -cpu host \
@@ -42,11 +41,10 @@ run_qemu_boot_test() {
       > "'$LOGFILE'" 2>&1 &
 
     qemu_pid=$!
-    ps aux | grep QEMU
     echo "QEMU launched as root with PID $qemu_pid"
 
     # Wait for SUCCESS_STRING or timeout
-      timeout=80
+      timeout=30
       elapsed=0
       while ! grep -q "'$SUCCESS_STRING'" "'$LOGFILE'" && [ $elapsed -lt $timeout ]; do
         sleep 1
@@ -64,7 +62,6 @@ run_qemu_boot_test() {
         result=1
       fi     
       exit $result
-  '
 }
 
 git branch
