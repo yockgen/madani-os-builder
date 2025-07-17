@@ -1,0 +1,44 @@
+name: PR Tester
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Copy tester script
+        run: |
+          if [ ! -f validate.sh ]; then
+            echo "validate.sh not found!"
+            exit 1
+          fi
+          chmod +x validate.sh
+
+      - name: Run build-tester
+        run: |
+          echo "Starting validate.sh..."
+          ./validate.sh
+          echo "Build and tests completed."
+
+      - name: Notify PR author on failure
+        if: failure()
+        run: |
+          PR_AUTHOR=$(jq --raw-output .pull_request.user.login $GITHUB_EVENT_PATH)
+          COMMENT_BODY="The build and tests for this PR have failed. Please address the issues before merging."
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            --data "{\"body\": \"$COMMENT_BODY\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"

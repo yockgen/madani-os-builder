@@ -25,7 +25,7 @@ systemConfig:
   # Kernel Configuration
   kernel:
     version: "6.12"
-    cmdline: "quiet splash"
+    cmdline: "security=selinux selinux=1 sysctl.vm.overcommit_memory=1 sysctl.kernel.panic=10 sysctl.kernel.panic_on_oops=1 sysctl.fs.inotify.max_user_instances=8192 rd.shell=0 rd.timeout=200 rd.emergency=reboot i915.force_probe=*"
 
   # Everything else uses defaults from the default template:
   # Network: Uses DHCP on first interface

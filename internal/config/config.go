@@ -60,11 +60,17 @@ type SystemConfig struct {
 	Immutability ImmutabilityConfig `yaml:"immutability,omitempty"`
 	Bootloader   Bootloader         `yaml:"bootloader"`
 	Packages     []string           `yaml:"packages"`
-	Kernel       KernelConfig       `yaml:"kernel"`
+	AdditionalFiles []AdditionalFileInfo `yaml:"additionalFiles"`
+	Kernel          KernelConfig         `yaml:"kernel"`
 }
 
-// KernelConfig holds the kernel configuration
-type KernelConfig struct {
+// AdditionalFileInfo holds information about local file and final path to be placed in the image
+type AdditionalFileInfo struct {
+	Local string `yaml:"local"` // path to the file on the host system
+	Final string `yaml:"final"` // path where the file should be placed in the image
+}
+
+// KernelConfig holds the kernel configuratioernenfig struct {
 	Version string `yaml:"version"`
 	Cmdline string `yaml:"cmdline"`
 }
@@ -98,6 +104,7 @@ var (
 	TargetArch      string
 	TargetImageType string
 	ProviderId      string
+	FullPkgList     []string
 )
 
 // LoadTemplate loads an ImageTemplate from the specified YAML template path

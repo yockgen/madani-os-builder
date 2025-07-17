@@ -86,7 +86,7 @@ func (p *eLxr) downloadImagePkgs(template *config.ImageTemplate) error {
 	pkgCacheDir := filepath.Join(globalCache, "pkgCache", providerId)
 	debutils.RepoCfg = p.repoCfg
 	debutils.GzHref = p.gzHref
-	_, err = debutils.DownloadPackages(pkgList, pkgCacheDir, "")
+	config.FullPkgList, err = debutils.DownloadPackages(pkgList, pkgCacheDir, "")
 	return err
 }
 

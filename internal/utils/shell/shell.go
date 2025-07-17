@@ -96,6 +96,7 @@ var commandMap = map[string]string{
 	"veritysetup":        "/usr/sbin/veritysetup",
 	"vgcreate":           "/usr/sbin/vgcreate",
 	"wipefs":             "/usr/sbin/wipefs",
+	"xorriso":            "/usr/bin/xorriso",
 	"xz":                 "/usr/bin/xz",
 	"yum":                "/usr/bin/yum",
 	"zstd":               "/usr/bin/zstd",

@@ -125,7 +125,7 @@ func (p *AzureLinux) downloadImagePkgs(template *config.ImageTemplate) error {
 	pkgCacheDir := filepath.Join(globalCache, "pkgCache", providerId)
 	rpmutils.RepoCfg = p.repoCfg
 	rpmutils.GzHref = p.gzHref
-	_, err = rpmutils.DownloadPackages(pkgList, pkgCacheDir, "")
+	config.FullPkgList, err = rpmutils.DownloadPackages(pkgList, pkgCacheDir, "")
 	return err
 }
 
