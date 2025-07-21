@@ -702,7 +702,10 @@ func buildUKI(installRoot, kernelPath, initrdPath, cmdlineFile, outputPath strin
 	cmdlineStr := string(data)
 	if template.IsImmutabilityEnabled() {
 		partData := extractRootHashPH(cmdlineStr)
-		prepareVeritySetup(partData, installRoot)
+		err := prepareVeritySetup(partData, installRoot)
+		if err != nil {
+			return fmt.Errorf("failed to get root hash part: %w", err)
+		}
 		rootHashR, err := getVerityRootHash(partData, installRoot)
 		if err != nil {
 			return fmt.Errorf("failed to get verity root hash: %w", err)
