@@ -1,6 +1,9 @@
 name: PR Tester
 
 on:
+  push:
+    branches:
+      - PR_tester_workflow_rpandya28
   pull_request:
     types: [opened, reopened, synchronize]
     branches:
@@ -16,7 +19,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y tree
-          tree /usr/share/ -L 4
 
       - name: Checkout PR code
         uses: actions/checkout@v4
@@ -42,11 +44,15 @@ jobs:
 
       - name: Notify PR author on failure
         if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVIEWER_ID: srmungar 
         run: |
+          # Get PR author
           PR_AUTHOR=$(jq --raw-output .pull_request.user.login $GITHUB_EVENT_PATH)
-          COMMENT_BODY="The build and tests for this PR have failed. Please address the issues before merging."
+          COMMENT_BODY="Hey @$PR_AUTHOR and @$REVIEWER_ID — the build and tests for this PR have failed.Please check the logs and help resolve the issues."
           curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             --data "{\"body\": \"$COMMENT_BODY\"}" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
