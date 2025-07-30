@@ -478,9 +478,6 @@ systemConfig:
 		if user1.HashAlgo != "sha512" {
 			t.Errorf("expected user1 hash_algo 'sha512', got %s", user1.HashAlgo)
 		}
-		if user1.IsPasswordHashed() {
-			t.Errorf("expected user1 password to be detected as plain text")
-		}
 		if !user1.Sudo {
 			t.Errorf("expected user1 to have sudo privileges")
 		}
@@ -493,9 +490,6 @@ systemConfig:
 	} else {
 		if user2.Password != "$6$salt$prehashed..." {
 			t.Errorf("expected user2 password '$6$salt$prehashed...', got %s", user2.Password)
-		}
-		if !user2.IsPasswordHashed() {
-			t.Errorf("expected user2 password to be detected as hashed")
 		}
 		if len(user2.Groups) != 2 {
 			t.Errorf("expected user2 to have 2 groups, got %d", len(user2.Groups))
@@ -513,115 +507,6 @@ systemConfig:
 		if user3.PasswordMaxAge != 90 {
 			t.Errorf("expected user3 passwordMaxAge 90, got %d", user3.PasswordMaxAge)
 		}
-	}
-}
-
-func TestIsPasswordHashed(t *testing.T) {
-	tests := []struct {
-		name     string
-		password string
-		expected bool
-	}{
-		{"SHA-512 hash", "$6$salt$hash...", true},
-		{"SHA-256 hash", "$5$salt$hash...", true},
-		{"Blowfish hash", "$2b$12$salt$hash...", true},
-		{"MD5 hash", "$1$salt$hash...", true},
-		{"yescrypt hash", "$y$j9T$salt$hash...", true},
-		{"Plain text", "plainpassword", false},
-		{"Plain text with $", "pass$word", false},
-		{"Empty string", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			user := UserConfig{Password: tt.password}
-			result := user.IsPasswordHashed()
-			if result != tt.expected {
-				t.Errorf("expected %t for password '%s', got %t", tt.expected, tt.password, result)
-			}
-		})
-	}
-}
-
-func TestUserConfigValidation(t *testing.T) {
-	tests := []struct {
-		name        string
-		user        UserConfig
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name: "valid_plain_text_with_algo",
-			user: UserConfig{
-				Name:     "user1",
-				Password: "validpass123",
-				HashAlgo: "sha512",
-			},
-			expectError: false,
-		},
-		{
-			name: "valid_pre_hashed",
-			user: UserConfig{
-				Name:     "user2",
-				Password: "$6$salt$hash...",
-			},
-			expectError: false,
-		},
-		{
-			name: "empty_name",
-			user: UserConfig{
-				Password: "validpass",
-				HashAlgo: "sha512",
-			},
-			expectError: true,
-			errorMsg:    "name cannot be empty",
-		},
-		{
-			name: "empty_password",
-			user: UserConfig{
-				Name:     "user3",
-				Password: "",
-			},
-			expectError: true,
-			errorMsg:    "password cannot be empty",
-		},
-		{
-			name: "invalid_hash_algo",
-			user: UserConfig{
-				Name:     "user4",
-				Password: "validpass",
-				HashAlgo: "invalid",
-			},
-			expectError: true,
-			errorMsg:    "invalid hash_algo",
-		},
-		{
-			name: "valid_alternative_algos",
-			user: UserConfig{
-				Name:     "user5",
-				Password: "validpass",
-				HashAlgo: "bcrypt",
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.user.Validate()
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("expected error containing '%s', got: %v", tt.errorMsg, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
 	}
 }
 
@@ -691,9 +576,6 @@ func TestUserHelperMethods(t *testing.T) {
 	} else {
 		if adminUser.PasswordMaxAge != 365 {
 			t.Errorf("expected admin passwordMaxAge to be 365, got %d", adminUser.PasswordMaxAge)
-		}
-		if !adminUser.IsPasswordHashed() {
-			t.Errorf("expected admin password to be detected as hashed")
 		}
 	}
 }
@@ -878,39 +760,5 @@ func TestEmptyUsersConfig(t *testing.T) {
 	nonExistentUser := template.GetUserByName("anyuser")
 	if nonExistentUser != nil {
 		t.Errorf("expected not to find any user in empty config")
-	}
-}
-
-func TestProcessUserPasswords(t *testing.T) {
-	template := &ImageTemplate{
-		SystemConfig: SystemConfig{
-			Users: []UserConfig{
-				{Name: "user1", Password: "plainpass", HashAlgo: "sha512"},
-				{Name: "user2", Password: "$6$existing$hash..."},
-				{Name: "user3", Password: "anotherpass", HashAlgo: "bcrypt"},
-			},
-		},
-	}
-
-	err := template.ProcessUserPasswords()
-	if err != nil {
-		t.Fatalf("ProcessUserPasswords failed: %v", err)
-	}
-
-	// Verify all passwords are hashed and hash_algo cleared
-	for i, user := range template.SystemConfig.Users {
-		if !user.IsPasswordHashed() {
-			t.Errorf("user %d (%s): password should be hashed after processing", i, user.Name)
-		}
-		if user.HashAlgo != "" {
-			t.Errorf("user %d (%s): hash_algo should be cleared after processing, got: %s",
-				i, user.Name, user.HashAlgo)
-		}
-	}
-
-	// Verify user2 (pre-hashed) password unchanged
-	user2 := template.GetUserByName("user2")
-	if user2.Password != "$6$existing$hash..." {
-		t.Errorf("user2: pre-hashed password should be unchanged")
 	}
 }

@@ -2,14 +2,11 @@ package config
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 
-	crypt "github.com/amoghe/go-crypt"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -307,100 +304,4 @@ func (sc *SystemConfig) GetUserByName(name string) *UserConfig {
 // HasUsers returns whether any users are configured (SystemConfig method)
 func (sc *SystemConfig) HasUsers() bool {
 	return len(sc.Users) > 0
-}
-
-func (u *UserConfig) IsPasswordHashed() bool {
-	return strings.HasPrefix(u.Password, "$1$") || // MD5
-		strings.HasPrefix(u.Password, "$2") || // Blowfish variants
-		strings.HasPrefix(u.Password, "$5$") || // SHA-256
-		strings.HasPrefix(u.Password, "$6$") || // SHA-512
-		strings.HasPrefix(u.Password, "$y$") // yescrypt
-}
-
-func (u *UserConfig) GetHashedPassword() (string, error) {
-	// If already hashed, return as-is
-	if u.IsPasswordHashed() {
-		return u.Password, nil
-	}
-
-	// Plain text password - need to hash it
-	if u.Password == "" {
-		return "", fmt.Errorf("user '%s': password cannot be empty", u.Name)
-	}
-
-	// Default to sha512 if no algorithm specified
-	algorithm := u.HashAlgo
-	if algorithm == "" {
-		algorithm = "sha512"
-	}
-
-	// Hash the plain text password using system's crypt function
-	hashedPassword, err := u.hashPassword(u.Password, algorithm)
-	if err != nil {
-		return "", fmt.Errorf("user '%s': failed to hash password: %w", u.Name, err)
-	}
-
-	return hashedPassword, nil
-}
-
-func (u *UserConfig) hashPassword(password, algorithm string) (string, error) {
-	switch strings.ToLower(algorithm) {
-	case "sha512", "6":
-		salt := u.generateSalt(16)
-		hashed, err := crypt.Crypt(password, "$6$"+salt+"$")
-		if err != nil {
-			return "", err
-		}
-		return hashed, nil
-	case "sha256", "5":
-		salt := u.generateSalt(16)
-		hashed, err := crypt.Crypt(password, "$5$"+salt+"$")
-		if err != nil {
-			return "", err
-		}
-		return hashed, nil
-	case "bcrypt", "blowfish", "2b":
-		// Use bcrypt library if available
-		hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			return "", err
-		}
-		return string(hashedBytes), nil
-	default:
-		return "", fmt.Errorf("unsupported hash algorithm: %s", algorithm)
-	}
-}
-
-func (u *UserConfig) generateSalt(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./"
-	salt := make([]byte, length)
-	for i := range salt {
-		salt[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(salt)
-}
-
-func (u *UserConfig) Validate() error {
-	log := logger.Logger()
-	if u.Name == "" {
-		return fmt.Errorf("user name cannot be empty")
-	}
-
-	if u.Password == "" {
-		return fmt.Errorf("user '%s': password cannot be empty", u.Name)
-	}
-
-	// If password is plain text, validate hash algorithm
-	if !u.IsPasswordHashed() {
-		if u.HashAlgo != "" {
-			validAlgos := []string{"sha512", "sha256", "bcrypt", "blowfish", "6", "5", "2b"}
-			if !contains(validAlgos, strings.ToLower(u.HashAlgo)) {
-				return fmt.Errorf("user '%s': invalid hash_algo '%s'", u.Name, u.HashAlgo)
-			}
-		}
-		// Security warning for plain text passwords
-		log.Warnf("SECURITY: User '%s' has plain text password in config", u.Name)
-	}
-
-	return nil
 }
