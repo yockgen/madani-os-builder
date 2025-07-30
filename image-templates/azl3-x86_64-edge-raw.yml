@@ -21,8 +21,21 @@ systemConfig:
 
   # User Configuration
   users:
-    - name: user
-      password: user # TODO: Replace with hashed password
+    # Pre-hashed password (production approach)
+    - name: admin
+      password: "$6$rounds=4096$salt$hashedvalue..."
+      groups: ["wheel"]
+
+    # Plain text with algorithm (development approach)
+    - name: testuser
+      password: "test123"
+      hash_algo: "sha512"
+
+    # Plain text with different algorithm
+    - name: secureuser
+      password: "securepass"
+      hash_algo: "bcrypt"
+      sudo: true
 
   # Package Configuration
   packages:

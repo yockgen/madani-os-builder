@@ -406,8 +406,10 @@ func TestTemplateHelperMethodsWithImmutability(t *testing.T) {
 	}
 }
 
-func TestLoadYAMLTemplateWithUsers(t *testing.T) {
-	// Create a temporary YAML file with users configuration under systemConfig
+// ======================== UPDATED USER TESTS FOR hash_algo APPROACH ========================
+
+func TestLoadYAMLTemplateWithHashAlgo(t *testing.T) {
+	// Updated YAML content to use hash_algo approach
 	yamlContent := `image:
   name: azl3-x86_64-edge
   version: "1.0.0"
@@ -422,12 +424,17 @@ systemConfig:
   name: edge
   description: Default yml configuration for edge image
   users:
-    - name: user
-      password: user
+    - name: user1
+      password: "plainpass123"
+      hash_algo: "sha512"
       sudo: true
-    - name: admin
-      passwordHash: "$6$salt$hash"
+    - name: user2
+      password: "$6$salt$prehashed..."
+      # No hash_algo needed - already hashed
       groups: ["wheel", "docker"]
+    - name: user3
+      password: "devpass"
+      hash_algo: "bcrypt"
       passwordMaxAge: 90
   packages:
     - openssh-server
@@ -456,41 +463,165 @@ systemConfig:
 
 	// Verify users configuration
 	users := template.GetUsers()
-	if len(users) != 2 {
-		t.Errorf("expected 2 users, got %d", len(users))
+	if len(users) != 3 {
+		t.Errorf("expected 3 users, got %d", len(users))
 	}
 
-	// Test user by name lookup
-	userUser := template.GetUserByName("user")
-	if userUser == nil {
-		t.Errorf("expected to find user 'user'")
+	// Test user1 - plain text with algorithm
+	user1 := template.GetUserByName("user1")
+	if user1 == nil {
+		t.Errorf("expected to find user 'user1'")
 	} else {
-		if userUser.Password != "user" {
-			t.Errorf("expected user password 'user', got %s", userUser.Password)
+		if user1.Password != "plainpass123" {
+			t.Errorf("expected user1 password 'plainpass123', got %s", user1.Password)
 		}
-		if !userUser.Sudo {
-			t.Errorf("expected user to have sudo privileges")
+		if user1.HashAlgo != "sha512" {
+			t.Errorf("expected user1 hash_algo 'sha512', got %s", user1.HashAlgo)
+		}
+		if user1.IsPasswordHashed() {
+			t.Errorf("expected user1 password to be detected as plain text")
+		}
+		if !user1.Sudo {
+			t.Errorf("expected user1 to have sudo privileges")
 		}
 	}
 
-	adminUser := template.GetUserByName("admin")
-	if adminUser == nil {
-		t.Errorf("expected to find user 'admin'")
+	// Test user2 - pre-hashed password
+	user2 := template.GetUserByName("user2")
+	if user2 == nil {
+		t.Errorf("expected to find user 'user2'")
 	} else {
-		if adminUser.PasswordHash != "$6$salt$hash" {
-			t.Errorf("expected admin password hash '$6$salt$hash', got %s", adminUser.PasswordHash)
+		if user2.Password != "$6$salt$prehashed..." {
+			t.Errorf("expected user2 password '$6$salt$prehashed...', got %s", user2.Password)
 		}
-		if len(adminUser.Groups) != 2 {
-			t.Errorf("expected admin to have 2 groups, got %d", len(adminUser.Groups))
+		if !user2.IsPasswordHashed() {
+			t.Errorf("expected user2 password to be detected as hashed")
 		}
-		if adminUser.PasswordMaxAge != 90 {
-			t.Errorf("expected admin passwordMaxAge to be 90, got %d", adminUser.PasswordMaxAge)
+		if len(user2.Groups) != 2 {
+			t.Errorf("expected user2 to have 2 groups, got %d", len(user2.Groups))
 		}
 	}
 
-	// Test HasUsers method
-	if !template.HasUsers() {
-		t.Errorf("expected template to have users")
+	// Test user3 - plain text with bcrypt
+	user3 := template.GetUserByName("user3")
+	if user3 == nil {
+		t.Errorf("expected to find user 'user3'")
+	} else {
+		if user3.HashAlgo != "bcrypt" {
+			t.Errorf("expected user3 hash_algo 'bcrypt', got %s", user3.HashAlgo)
+		}
+		if user3.PasswordMaxAge != 90 {
+			t.Errorf("expected user3 passwordMaxAge 90, got %d", user3.PasswordMaxAge)
+		}
+	}
+}
+
+func TestIsPasswordHashed(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		expected bool
+	}{
+		{"SHA-512 hash", "$6$salt$hash...", true},
+		{"SHA-256 hash", "$5$salt$hash...", true},
+		{"Blowfish hash", "$2b$12$salt$hash...", true},
+		{"MD5 hash", "$1$salt$hash...", true},
+		{"yescrypt hash", "$y$j9T$salt$hash...", true},
+		{"Plain text", "plainpassword", false},
+		{"Plain text with $", "pass$word", false},
+		{"Empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := UserConfig{Password: tt.password}
+			result := user.IsPasswordHashed()
+			if result != tt.expected {
+				t.Errorf("expected %t for password '%s', got %t", tt.expected, tt.password, result)
+			}
+		})
+	}
+}
+
+func TestUserConfigValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		user        UserConfig
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid_plain_text_with_algo",
+			user: UserConfig{
+				Name:     "user1",
+				Password: "validpass123",
+				HashAlgo: "sha512",
+			},
+			expectError: false,
+		},
+		{
+			name: "valid_pre_hashed",
+			user: UserConfig{
+				Name:     "user2",
+				Password: "$6$salt$hash...",
+			},
+			expectError: false,
+		},
+		{
+			name: "empty_name",
+			user: UserConfig{
+				Password: "validpass",
+				HashAlgo: "sha512",
+			},
+			expectError: true,
+			errorMsg:    "name cannot be empty",
+		},
+		{
+			name: "empty_password",
+			user: UserConfig{
+				Name:     "user3",
+				Password: "",
+			},
+			expectError: true,
+			errorMsg:    "password cannot be empty",
+		},
+		{
+			name: "invalid_hash_algo",
+			user: UserConfig{
+				Name:     "user4",
+				Password: "validpass",
+				HashAlgo: "invalid",
+			},
+			expectError: true,
+			errorMsg:    "invalid hash_algo",
+		},
+		{
+			name: "valid_alternative_algos",
+			user: UserConfig{
+				Name:     "user5",
+				Password: "validpass",
+				HashAlgo: "bcrypt",
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.user.Validate()
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error containing '%s', got: %v", tt.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
 
@@ -510,8 +641,8 @@ func TestUserHelperMethods(t *testing.T) {
 			Name:        "test-config",
 			Description: "Test configuration",
 			Users: []UserConfig{
-				{Name: "testuser", Password: "testpass", Sudo: true},
-				{Name: "admin", PasswordHash: "$6$test$hash", Groups: []string{"wheel"}, PasswordMaxAge: 365},
+				{Name: "testuser", Password: "testpass", HashAlgo: "sha512", Sudo: true},
+				{Name: "admin", Password: "$6$test$hash", Groups: []string{"wheel"}, PasswordMaxAge: 365},
 			},
 			Packages: []string{"package1", "package2"},
 			Kernel: KernelConfig{
@@ -533,6 +664,9 @@ func TestUserHelperMethods(t *testing.T) {
 	} else {
 		if !testUser.Sudo {
 			t.Errorf("expected testuser to have sudo privileges")
+		}
+		if testUser.HashAlgo != "sha512" {
+			t.Errorf("expected testuser hash_algo 'sha512', got %s", testUser.HashAlgo)
 		}
 	}
 
@@ -558,6 +692,9 @@ func TestUserHelperMethods(t *testing.T) {
 		if adminUser.PasswordMaxAge != 365 {
 			t.Errorf("expected admin passwordMaxAge to be 365, got %d", adminUser.PasswordMaxAge)
 		}
+		if !adminUser.IsPasswordHashed() {
+			t.Errorf("expected admin password to be detected as hashed")
+		}
 	}
 }
 
@@ -565,8 +702,8 @@ func TestMergeSystemConfigWithUsers(t *testing.T) {
 	defaultConfig := SystemConfig{
 		Name: "default",
 		Users: []UserConfig{
-			{Name: "defaultuser", Password: "defaultpass"},
-			{Name: "shared", Password: "defaultshared", Groups: []string{"default"}},
+			{Name: "defaultuser", Password: "defaultpass", HashAlgo: "sha512"},
+			{Name: "shared", Password: "defaultshared", HashAlgo: "sha256", Groups: []string{"default"}},
 		},
 		Packages: []string{"base-package"},
 	}
@@ -574,8 +711,8 @@ func TestMergeSystemConfigWithUsers(t *testing.T) {
 	userConfig := SystemConfig{
 		Name: "user",
 		Users: []UserConfig{
-			{Name: "newuser", Password: "newpass"},
-			{Name: "shared", Password: "usershared", Groups: []string{"user", "admin"}, PasswordMaxAge: 180},
+			{Name: "newuser", Password: "newpass", HashAlgo: "bcrypt"},
+			{Name: "shared", Password: "usershared", HashAlgo: "sha512", Groups: []string{"user", "admin"}, PasswordMaxAge: 180},
 		},
 		Packages: []string{"user-package"},
 	}
@@ -602,6 +739,9 @@ func TestMergeSystemConfigWithUsers(t *testing.T) {
 		if sharedUser.Password != "usershared" {
 			t.Errorf("expected shared user password to be 'usershared', got %s", sharedUser.Password)
 		}
+		if sharedUser.HashAlgo != "sha512" {
+			t.Errorf("expected shared user hash_algo to be 'sha512', got %s", sharedUser.HashAlgo)
+		}
 		if len(sharedUser.Groups) != 3 {
 			t.Errorf("expected shared user to have 3 groups (merged), got %d", len(sharedUser.Groups))
 		}
@@ -619,6 +759,7 @@ func TestUserConfigMerging(t *testing.T) {
 	defaultUser := UserConfig{
 		Name:           "user",
 		Password:       "default",
+		HashAlgo:       "sha256",
 		Groups:         []string{"users", "default"},
 		Home:           "/home/default",
 		Shell:          "/bin/bash",
@@ -628,6 +769,8 @@ func TestUserConfigMerging(t *testing.T) {
 
 	userUser := UserConfig{
 		Name:           "user",
+		Password:       "userpass", // Override password
+		HashAlgo:       "sha512",   // Override algorithm
 		Groups:         []string{"admin", "docker"},
 		Sudo:           true,
 		Shell:          "/bin/zsh",
@@ -637,6 +780,12 @@ func TestUserConfigMerging(t *testing.T) {
 	merged := mergeUserConfig(defaultUser, userUser)
 
 	// Test that user values override defaults
+	if merged.Password != "userpass" {
+		t.Errorf("expected merged password to be 'userpass', got %s", merged.Password)
+	}
+	if merged.HashAlgo != "sha512" {
+		t.Errorf("expected merged hash_algo to be 'sha512', got %s", merged.HashAlgo)
+	}
 	if merged.Sudo != true {
 		t.Errorf("expected merged sudo to be true, got %t", merged.Sudo)
 	}
@@ -729,5 +878,39 @@ func TestEmptyUsersConfig(t *testing.T) {
 	nonExistentUser := template.GetUserByName("anyuser")
 	if nonExistentUser != nil {
 		t.Errorf("expected not to find any user in empty config")
+	}
+}
+
+func TestProcessUserPasswords(t *testing.T) {
+	template := &ImageTemplate{
+		SystemConfig: SystemConfig{
+			Users: []UserConfig{
+				{Name: "user1", Password: "plainpass", HashAlgo: "sha512"},
+				{Name: "user2", Password: "$6$existing$hash..."},
+				{Name: "user3", Password: "anotherpass", HashAlgo: "bcrypt"},
+			},
+		},
+	}
+
+	err := template.ProcessUserPasswords()
+	if err != nil {
+		t.Fatalf("ProcessUserPasswords failed: %v", err)
+	}
+
+	// Verify all passwords are hashed and hash_algo cleared
+	for i, user := range template.SystemConfig.Users {
+		if !user.IsPasswordHashed() {
+			t.Errorf("user %d (%s): password should be hashed after processing", i, user.Name)
+		}
+		if user.HashAlgo != "" {
+			t.Errorf("user %d (%s): hash_algo should be cleared after processing, got: %s",
+				i, user.Name, user.HashAlgo)
+		}
+	}
+
+	// Verify user2 (pre-hashed) password unchanged
+	user2 := template.GetUserByName("user2")
+	if user2.Password != "$6$existing$hash..." {
+		t.Errorf("user2: pre-hashed password should be unchanged")
 	}
 }

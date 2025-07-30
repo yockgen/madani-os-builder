@@ -16,12 +16,6 @@ systemConfig:
     bootType: efi # (efi or legacy)
     provider: grub # (grub for efi and legacy mode, or systemd-boot for efi mode)
 
-  # User Configuration
-  users:
-    - name: root
-      passwordMaxAge: 99999  # in days
-      startupScript: /bin/bash # update with installer later
-
   packages:
     - filesystem
     - kernel

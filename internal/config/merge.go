@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/open-edge-platform/image-composer/internal/utils/file"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
@@ -147,6 +148,7 @@ func mergeSystemConfig(defaultConfig, userConfig SystemConfig) SystemConfig {
 	if len(userConfig.Users) > 0 {
 		merged.Users = mergeUsers(defaultConfig.Users, userConfig.Users)
 	}
+
 	// Merge bootloader config
 	if !isEmptyBootloader(userConfig.Bootloader) {
 		merged.Bootloader = mergeBootloader(defaultConfig.Bootloader, userConfig.Bootloader)
@@ -211,16 +213,30 @@ func mergeUsers(defaultUsers, userUsers []UserConfig) []UserConfig {
 func mergeUserConfig(defaultUser, userUser UserConfig) UserConfig {
 	merged := defaultUser // Start with default
 
-	// Override with user values where provided
+	// Override basic fields
 	if userUser.Name != "" {
 		merged.Name = userUser.Name
 	}
+
+	// Password and hash algorithm merging logic
 	if userUser.Password != "" {
 		merged.Password = userUser.Password
+
+		// If user provides hash_algo, use it
+		if userUser.HashAlgo != "" {
+			merged.HashAlgo = userUser.HashAlgo
+		}
+
+		// Special case: if user provides pre-hashed password, clear hash_algo
+		if strings.HasPrefix(userUser.Password, "$") {
+			merged.HashAlgo = ""
+		}
+	} else if userUser.HashAlgo != "" {
+		// User only changed algorithm for default password
+		merged.HashAlgo = userUser.HashAlgo
 	}
-	if userUser.PasswordHash != "" {
-		merged.PasswordHash = userUser.PasswordHash
-	}
+
+	// Other field merging
 	if userUser.PasswordMaxAge != 0 {
 		merged.PasswordMaxAge = userUser.PasswordMaxAge
 	}
@@ -234,14 +250,12 @@ func mergeUserConfig(defaultUser, userUser UserConfig) UserConfig {
 		merged.Shell = userUser.Shell
 	}
 
-	// Merge groups - user groups are added to default groups
+	// Merge groups
 	if len(userUser.Groups) > 0 {
 		merged.Groups = mergeStringSlices(defaultUser.Groups, userUser.Groups)
 	}
 
-	// Override sudo setting if explicitly set by user
-	// Note: We need to check if this is explicitly set vs default false
-	// For now, user setting takes precedence
+	// Override sudo setting
 	merged.Sudo = userUser.Sudo
 
 	return merged
