@@ -441,6 +441,12 @@ func createGrubCfg(installRoot, imageName string) error {
 		return fmt.Errorf("failed to replace ImageName in grub configuration: %w", err)
 	}
 
+	grubCfgSrc = grubCfgDest
+	grubCfgDest = filepath.Join(installRoot, "EFI", "BOOT", "grub.cfg")
+	if err := file.CopyFile(grubCfgSrc, grubCfgDest, "--preserve=mode", true); err != nil {
+		return fmt.Errorf("failed to copy grub.cfg to install root: %v", err)
+	}
+
 	return nil
 }
 
