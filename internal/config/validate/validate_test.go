@@ -157,7 +157,7 @@ target:
 		t.Fatalf("yml parsing error: %v", err)
 	}
 
-	// Re‐marshal to JSON bytes
+	// Re-marshal to JSON bytes
 	dataJSON, err := json.Marshal(raw)
 	if err != nil {
 		t.Fatalf("json marshaling error: %v", err)
