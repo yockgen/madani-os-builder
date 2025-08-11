@@ -101,7 +101,7 @@ func getInitrdTemplate() (*config.ImageTemplate, error) {
 	if _, err := os.Stat(initrdTemplateFile); os.IsNotExist(err) {
 		return nil, fmt.Errorf("initrd template file does not exist: %s", initrdTemplateFile)
 	}
-	initrdTemplate, err := config.LoadTemplate(initrdTemplateFile)
+	initrdTemplate, err := config.LoadTemplate(initrdTemplateFile, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load initrd template: %v", err)
 	}
