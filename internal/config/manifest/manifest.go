@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -172,6 +173,9 @@ func WriteSPDXToFile(pkgs []ospackage.PackageInfo, outFile string) error {
 
 	// TODO: The relative file path here should be where
 	// the final image is being stored and not under temp
+	if err := os.MkdirAll(filepath.Dir(outFile), 0o755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
 	f, err := os.Create(outFile)
 	if err != nil {
 		return fmt.Errorf("failed to create SPDX output file: %w", err)
