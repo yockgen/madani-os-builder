@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -161,8 +162,58 @@ func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 	return true, nil
 }
 
+func extractSedPattern(command string) (string, error) {
+	// This regex handles common sed patterns:
+	// - sed -i 's/pattern/replacement/'
+	// - sed -i 's/pattern/replacement/g'
+	// - sed -i '/pattern/d'
+	// - sed -i '/pattern/c\replacement'
+	// - sed -i '1,10 d'
+	// - sed -i '10 i\text to insert'
+	re := regexp.MustCompile(`(?s)sed\s+(?:-[^\s'"]*)?\s+'(.*?)'`)
+	matches := re.FindStringSubmatch(command)
+
+	if len(matches) >= 2 {
+		return matches[1], nil
+	}
+
+	return "", fmt.Errorf("no quoted string found in sed command")
+}
+
+func extractEchoString(command string) (string, error) {
+	// Match strings inside echo with single quotes
+	re := regexp.MustCompile(`(?s)echo\s+(?:-e\s+)?'(.*?)'`)
+	matches := re.FindStringSubmatch(command)
+
+	if len(matches) >= 2 {
+		return matches[1], nil
+	}
+
+	return "", fmt.Errorf("no quoted string found in echo command")
+}
+
 func verifyCmdWithFullPath(cmd string) (string, error) {
-	separators := []string{"&&", ";"}
+	var ignoreStr string
+	var err error
+	separators := []string{"&&", ";", "|", "||"}
+
+	// If the command is 'sed' or 'echo', we need to ignore the string content
+	if strings.HasPrefix(cmd, "sed ") {
+		ignoreStr, err = extractSedPattern(cmd)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract sed pattern: %w", err)
+		}
+	} else if strings.HasPrefix(cmd, "echo ") {
+		ignoreStr, err = extractEchoString(cmd)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract echo string: %w", err)
+		}
+	}
+
+	if ignoreStr != "" {
+		// Remove the ignore string from the command
+		cmd = strings.ReplaceAll(cmd, ignoreStr, "<ignored>")
+	}
 
 	sepIdx := -1
 	sep := ""
@@ -183,7 +234,11 @@ func verifyCmdWithFullPath(cmd string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to verify command: %w", err)
 		}
-		return leftCmdStr + " " + sep + " " + rightCmdStr, nil
+		updatedCmdStr := leftCmdStr + " " + sep + " " + rightCmdStr
+		if ignoreStr != "" && ignoreStr != "<ignored>" {
+			updatedCmdStr = strings.ReplaceAll(updatedCmdStr, "<ignored>", ignoreStr)
+		}
+		return updatedCmdStr, nil
 	}
 
 	fields := strings.Fields(cmd)
@@ -197,7 +252,12 @@ func verifyCmdWithFullPath(cmd string) (string, error) {
 	} else {
 		return "", fmt.Errorf("command %s not found in commandMap", bin)
 	}
-	return strings.Join(fields, " "), nil
+
+	updatedCmdStr := strings.Join(fields, " ")
+	if ignoreStr != "" && ignoreStr != "<ignored>" {
+		updatedCmdStr = strings.ReplaceAll(updatedCmdStr, "<ignored>", ignoreStr)
+	}
+	return updatedCmdStr, nil
 }
 
 // GetFullCmdStr prepares a command string with necessary prefixes

@@ -115,7 +115,6 @@ func CreateRawImage(filePath string, template *config.ImageTemplate) (string, ma
 	var diskPathIdMap map[string]string
 	var loopDevPath string
 
-	log := logger.Logger()
 	diskInfo := template.GetDiskConfig()
 	loopDevPath, err := LoopSetupCreateEmptyRawDisk(filePath, diskInfo.Size)
 	if err != nil {
@@ -123,15 +122,7 @@ func CreateRawImage(filePath string, template *config.ImageTemplate) (string, ma
 	}
 	diskPathIdMap, err = DiskPartitionsCreate(loopDevPath, diskInfo.Partitions, diskInfo.PartitionTableType)
 	if err != nil {
-		log.Errorf("failed to create partitions on loop device %s: %v", loopDevPath, err)
-		goto fail
+		return loopDevPath, diskPathIdMap, fmt.Errorf("failed to create partitions on loop device %s: %v", loopDevPath, err)
 	}
 	return loopDevPath, diskPathIdMap, nil
-
-fail:
-	errDel := LoopSetupDelete(loopDevPath)
-	if errDel != nil {
-		logger.Logger().Errorf("failed to delete loop device %s after error: %v", loopDevPath, errDel)
-	}
-	return loopDevPath, diskPathIdMap, fmt.Errorf("failed to create raw image: %w", err)
 }

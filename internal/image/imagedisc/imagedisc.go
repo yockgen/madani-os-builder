@@ -108,7 +108,7 @@ func CreateRawFile(filePath string, fileSize string) error {
 		}
 	}
 	cmd := fmt.Sprintf("fallocate -l %s %s", fileSizeStr, filePath)
-	_, err = shell.ExecCmd(cmd, false, "", nil)
+	_, err = shell.ExecCmd(cmd, true, "", nil)
 	return err
 }
 
@@ -426,10 +426,10 @@ func diskPartitionCreate(
 
 	// Create partition
 	var sfdiskScript strings.Builder
-	sfdiskScript.WriteString(fmt.Sprintf("start=%d\n", startSector))
+	sfdiskScript.WriteString(fmt.Sprintf("start=%d ", startSector))
 	if endSector != 0 {
 		size := endSector - startSector
-		sfdiskScript.WriteString(fmt.Sprintf("size=%d\n", size))
+		sfdiskScript.WriteString(fmt.Sprintf("size=%d ", size))
 	}
 
 	// Set partition type
@@ -440,11 +440,11 @@ func diskPartitionCreate(
 			typeGUID, _ = PartitionTypeStrToGUID(partitionInfo.Type)
 		}
 		if typeGUID != "" {
-			sfdiskScript.WriteString(fmt.Sprintf("type=%s\n", typeGUID))
+			sfdiskScript.WriteString(fmt.Sprintf("type=%s ", typeGUID))
 		}
 		// Set partition name if provided
 		if partitionName != "" {
-			sfdiskScript.WriteString(fmt.Sprintf("name=\"%s\"\n", partitionName))
+			sfdiskScript.WriteString(fmt.Sprintf("name=\"%s\" ", partitionName))
 		}
 	} else {
 		// For MBR, use hex type code
@@ -457,13 +457,13 @@ func diskPartitionCreate(
 		default:
 			typeCode = "83" // Linux
 		}
-		sfdiskScript.WriteString(fmt.Sprintf("type=%s\n", typeCode))
+		sfdiskScript.WriteString(fmt.Sprintf("type=%s ", typeCode))
 	}
 
 	// Handle boot flag
 	for _, flag := range partitionInfo.Flags {
 		if flag == "boot" {
-			sfdiskScript.WriteString("bootable\n")
+			sfdiskScript.WriteString("bootable ")
 			break
 		}
 	}

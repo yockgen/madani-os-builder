@@ -11,6 +11,7 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/image/imagedisc"
 	"github.com/open-edge-platform/image-composer/internal/image/imageos"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
+	"github.com/open-edge-platform/image-composer/internal/utils/shell"
 )
 
 var (
@@ -75,6 +76,12 @@ fail:
 	detachErr := imagedisc.LoopSetupDelete(loopDevPath)
 	if detachErr != nil {
 		log.Errorf("Failed to detach loopback device after error: %v", detachErr)
+	}
+
+	if _, err := os.Stat(filePath); err == nil {
+		if _, rmErr := shell.ExecCmd(fmt.Sprintf("rm -f %s", filePath), true, "", nil); rmErr != nil {
+			log.Errorf("Failed to remove raw image file %s after error: %v", filePath, rmErr)
+		}
 	}
 	return fmt.Errorf("error during raw image build: %w", err)
 }

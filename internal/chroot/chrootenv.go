@@ -122,7 +122,7 @@ func UpdateChrootLocalRPMRepo(chrootRepoDir string) error {
 		return fmt.Errorf("chroot repo directory not existing%s: %w", chrootHostPath, err)
 	}
 	cmd := fmt.Sprintf("createrepo_c --compatibility --update %s", chrootRepoDir)
-	if _, err = shell.ExecCmd(cmd, true, ChrootEnvRoot, nil); err != nil {
+	if _, err = shell.ExecCmd(cmd, false, ChrootEnvRoot, nil); err != nil {
 		return fmt.Errorf("failed to update chroot local cache repository: %w", err)
 	}
 	return nil
@@ -131,13 +131,13 @@ func UpdateChrootLocalRPMRepo(chrootRepoDir string) error {
 func UpdateLocalDebRepo(repoPath string) error {
 	metaDataPath := filepath.Join(repoPath, "dists/stable/main/binary-amd64", "Packages.gz")
 	if _, err := os.Stat(metaDataPath); err == nil {
-		if _, err = shell.ExecCmd("rm -f "+metaDataPath, true, "", nil); err != nil {
+		if _, err = shell.ExecCmd("rm -f "+metaDataPath, false, "", nil); err != nil {
 			return fmt.Errorf("failed to remove existing Packages.gz: %w", err)
 		}
 	}
 	metaDataDir := filepath.Dir(metaDataPath)
 	if _, err := os.Stat(metaDataDir); os.IsNotExist(err) {
-		if _, err = shell.ExecCmd("mkdir -p "+metaDataDir, true, "", nil); err != nil {
+		if _, err = shell.ExecCmd("mkdir -p "+metaDataDir, false, "", nil); err != nil {
 			return fmt.Errorf("failed to create metadata directory %s: %w", metaDataDir, err)
 		}
 	}
@@ -365,7 +365,7 @@ func StopGPGComponents(chrootPath string) error {
 		log.Debugf("gpgconf command not found in chroot environment, skipping GPG components stop")
 		return nil
 	}
-	output, err := shell.ExecCmd("gpgconf --list-components", true, chrootPath, nil)
+	output, err := shell.ExecCmd("gpgconf --list-components", false, chrootPath, nil)
 	if err != nil {
 		return fmt.Errorf("failed to list GPG components in chroot environment: %w", err)
 	}

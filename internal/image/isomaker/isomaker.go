@@ -190,7 +190,7 @@ func createISO(template *config.ImageTemplate, initrdRootfsPath, initrdFilePath,
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if _, err := shell.ExecCmd("mkdir -p "+dir, true, "", nil); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
@@ -484,7 +484,6 @@ func createEfiFatImage(isoEfiPath, isoImagesPath string) (string, error) {
 	if err := mount.MountPath(efiFatImgPath, tempMountDir, "-o loop"); err != nil {
 		return "", fmt.Errorf("failed to mount EFI FAT image: %v", err)
 	}
-	defer os.RemoveAll(tempMountDir)
 
 	// Copy the EFI bootloader to the FAT image
 	efiBootDir := filepath.Join(tempMountDir, "EFI", "BOOT")
@@ -504,14 +503,18 @@ func createEfiFatImage(isoEfiPath, isoImagesPath string) (string, error) {
 		return "", fmt.Errorf("failed to unmount temporary mount directory %s: %v", tempMountDir, err)
 	}
 
+	if _, err = shell.ExecCmd("rm -rf "+tempMountDir, true, "", nil); err != nil {
+		return "", fmt.Errorf("failed to remove temporary mount directory %s: %v", tempMountDir, err)
+	}
+
 	return efiFatImgPath, nil
 
 fail:
 	if umountErr := mount.UmountPath(tempMountDir); umountErr != nil {
 		log.Errorf("Failed to unmount temporary mount directory %s: %v", tempMountDir, umountErr)
 	}
-	if err := os.Remove(efiFatImgPath); err != nil {
-		log.Errorf("Failed to remove EFI FAT image %s: %v", efiFatImgPath, err)
+	if _, err := shell.ExecCmd("rm -rf "+tempMountDir, true, "", nil); err != nil {
+		return "", fmt.Errorf("failed to remove temporary mount directory %s: %v", tempMountDir, err)
 	}
 	return "", err
 }

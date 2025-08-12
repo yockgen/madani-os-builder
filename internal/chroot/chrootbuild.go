@@ -251,12 +251,12 @@ func downloadChrootEnvPackages(targetOs string, targetDist string, targetArch st
 func updateRpmDB(chrootEnvBuildPath string, rpmList []string) error {
 	log := logger.Logger()
 	cmdStr := "rpm -E '%{_db_backend}'"
-	hostRpmDbBackend, err := shell.ExecCmd(cmdStr, true, "", nil)
+	hostRpmDbBackend, err := shell.ExecCmd(cmdStr, false, "", nil)
 	if err != nil {
 		return fmt.Errorf("failed to get host RPM DB backend: %v", err)
 	}
 	hostRpmDbBackend = strings.TrimSpace(hostRpmDbBackend)
-	chrootRpmDbBackend, err := shell.ExecCmd(cmdStr, true, chrootEnvBuildPath, nil)
+	chrootRpmDbBackend, err := shell.ExecCmd(cmdStr, false, chrootEnvBuildPath, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot RPM DB backend: %v", err)
 	}
@@ -272,7 +272,7 @@ func updateRpmDB(chrootEnvBuildPath string, rpmList []string) error {
 	if _, err = shell.ExecCmd("rm -rf /var/lib/rpm/*", true, chrootEnvBuildPath, nil); err != nil {
 		return fmt.Errorf("failed to remove RPM database: %v", err)
 	}
-	if _, err = shell.ExecCmd("rpm --initdb", true, chrootEnvBuildPath, nil); err != nil {
+	if _, err = shell.ExecCmd("rpm --initdb", false, chrootEnvBuildPath, nil); err != nil {
 		return fmt.Errorf("failed to initialize RPM database: %v", err)
 	}
 
@@ -302,7 +302,7 @@ func importGpgKeys(targetOs string, chrootEnvBuildPath string) error {
 		cmdStr = "rpm -q -l azurelinux-repos-shared | grep 'rpm-gpg'"
 	}
 
-	output, err := shell.ExecCmd(cmdStr, true, chrootEnvBuildPath, nil)
+	output, err := shell.ExecCmd(cmdStr, false, chrootEnvBuildPath, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get GPG keys: %v", err)
 	}
@@ -310,7 +310,7 @@ func importGpgKeys(targetOs string, chrootEnvBuildPath string) error {
 		gpgKeys := strings.Split(output, "\n")
 		log.Infof("Importing GPG key: " + gpgKeys[0])
 		cmdStr = "rpm --import " + gpgKeys[0]
-		_, err = shell.ExecCmd(cmdStr, true, chrootEnvBuildPath, nil)
+		_, err = shell.ExecCmd(cmdStr, false, chrootEnvBuildPath, nil)
 		if err != nil {
 			return fmt.Errorf("failed to import GPG key: %v", err)
 		}
@@ -324,7 +324,7 @@ func installRpmPkg(targetOs, chrootEnvPath string, allPkgsList []string) error {
 	log := logger.Logger()
 	chrootRpmDbPath := filepath.Join(chrootEnvPath, "var", "lib", "rpm")
 	if _, err := os.Stat(chrootRpmDbPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(chrootRpmDbPath, 0755); err != nil {
+		if _, err := shell.ExecCmd("mkdir -p "+chrootRpmDbPath, true, "", nil); err != nil {
 			return fmt.Errorf("failed to create chroot environment directory: %v", err)
 		}
 	}
@@ -547,14 +547,6 @@ func CleanChrootBuild(targetOs string, targetDist string, targetArch string) err
 				return fmt.Errorf("failed to remove chroot env build path: %v", err)
 			} else {
 				log.Infof("Removed chroot env build path: %s", chrootEnvPath)
-			}
-		} else if file.IsDir() && file.Name() == "packages" {
-			chrootPkgCachePath := filepath.Join(ChrootBuildDir, file.Name())
-			_, err = shell.ExecCmd("rm -rf "+chrootPkgCachePath, true, "", nil)
-			if err != nil {
-				return fmt.Errorf("failed to remove chroot package cache path: %v", err)
-			} else {
-				log.Infof("Removed chroot package cache path: %s", chrootPkgCachePath)
 			}
 		}
 	}

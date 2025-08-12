@@ -377,7 +377,7 @@ func initImageRpmDb(installRoot string, template *config.ImageTemplate) error {
 	log.Infof("Initializing RPM database in %s", installRoot)
 	rpmDbPath := filepath.Join(installRoot, "var", "lib", "rpm")
 	if _, err := os.Stat(rpmDbPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(rpmDbPath, 0755); err != nil {
+		if _, err := shell.ExecCmd("mkdir -p "+rpmDbPath, true, "", nil); err != nil {
 			return fmt.Errorf("failed to create RPM database directory: %w", err)
 		}
 	}
@@ -432,13 +432,13 @@ func initDebLocalRepoWithinInstallRoot(installRoot string) error {
 
 	// Create a policy-rc.d file to prevent service startup in chroot
 	policyFile := filepath.Join(installRoot, "/usr/sbin/policy-rc.d")
-	policyContent := []byte("#!/bin/sh\nexit 101\n")
+	policyContent := "#!/bin/sh\nexit 101\n"
 
-	if err := os.MkdirAll(filepath.Dir(policyFile), 0755); err != nil {
+	if _, err := shell.ExecCmd("mkdir -p "+filepath.Dir(policyFile), true, "", nil); err != nil {
 		return fmt.Errorf("failed to create policy-rc.d directory: %w", err)
 	}
 
-	if err := os.WriteFile(policyFile, policyContent, 0755); err != nil {
+	if err := file.Write(policyContent, policyFile); err != nil {
 		return fmt.Errorf("failed to create policy-rc.d file: %w", err)
 	}
 
@@ -740,14 +740,13 @@ func buildImageUKI(installRoot string, template *config.ImageTemplate) error {
 // Helper to get the current kernel version from the rootfs
 func getKernelVersion(installRoot string) (string, error) {
 	kernelDir := filepath.Join(installRoot, "boot")
-	files, err := os.ReadDir(kernelDir)
+	fileList, err := file.GetFileList(kernelDir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to list kernel directory %s: %w", kernelDir, err)
 	}
-	for _, f := range files {
-		name := f.Name()
-		if strings.HasPrefix(name, "vmlinuz-") {
-			return strings.TrimPrefix(name, "vmlinuz-"), nil
+	for _, f := range fileList {
+		if strings.HasPrefix(f, "vmlinuz-") {
+			return strings.TrimPrefix(f, "vmlinuz-"), nil
 		}
 	}
 	return "", fmt.Errorf("kernel image not found in %s", kernelDir)
@@ -856,7 +855,7 @@ func prepareVeritySetup(partPair, installRoot string) error {
 
 	// Create and mount /tmp for ukify (Python tempfile needs this)
 	tmpDir := filepath.Join(installRoot, "tmp")
-	if err := os.MkdirAll(tmpDir, 0777); err != nil {
+	if _, err := shell.ExecCmd("mkdir -p "+tmpDir, true, "", nil); err != nil {
 		return fmt.Errorf("failed to create /tmp directory: %w", err)
 	}
 	if _, err := shell.ExecCmd("mount -t tmpfs tmpfs /tmp", true, installRoot, nil); err != nil {
@@ -868,7 +867,7 @@ func prepareVeritySetup(partPair, installRoot string) error {
 
 	// Create and mount /boot/efi/tmp for veritysetup
 	veritytmpDir := filepath.Join(installRoot, "boot/efi/tmp")
-	if err := os.MkdirAll(veritytmpDir, 0777); err != nil {
+	if _, err := shell.ExecCmd("mkdir -p "+veritytmpDir, true, "", nil); err != nil {
 		return fmt.Errorf("failed to create /boot/efi/tmp directory: %w", err)
 	}
 	if _, err := shell.ExecCmd("mount -t tmpfs tmpfs /boot/efi/tmp", true, installRoot, nil); err != nil {
@@ -888,7 +887,7 @@ func removeVerityTmp(installRoot string) {
 	if _, err := shell.ExecCmd("umount /tmp", true, installRoot, nil); err != nil {
 		log.Warnf("Failed to unmount tmpfs on /tmp: %v", err)
 	}
-	if err := os.RemoveAll(tmpDir); err != nil {
+	if _, err := shell.ExecCmd("rm -rf "+tmpDir, true, "", nil); err != nil {
 		log.Warnf("Failed to remove tmp directory %s: %v", tmpDir, err)
 	}
 
@@ -897,7 +896,8 @@ func removeVerityTmp(installRoot string) {
 	if _, err := shell.ExecCmd("umount /boot/efi/tmp", true, installRoot, nil); err != nil {
 		log.Warnf("Failed to unmount tmpfs on /boot/efi/tmp: %v", err)
 	}
-	if err := os.RemoveAll(veritytmpDir); err != nil {
+
+	if _, err := shell.ExecCmd("rm -rf "+veritytmpDir, true, "", nil); err != nil {
 		log.Warnf("Failed to remove tmp directory %s: %v", veritytmpDir, err)
 	}
 }
@@ -929,7 +929,7 @@ func getVerityRootHash(partPair, installRoot string) (string, error) {
 
 // Helper to build UKI using ukify
 func buildUKI(installRoot, kernelPath, initrdPath, cmdlineFile, outputPath string, template *config.ImageTemplate) error {
-	data, err := os.ReadFile(filepath.Join(installRoot, cmdlineFile))
+	data, err := file.Read(filepath.Join(installRoot, cmdlineFile))
 	if err != nil {
 		return fmt.Errorf("failed to read cmdline file: %w", err)
 	}

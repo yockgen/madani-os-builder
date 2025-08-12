@@ -77,16 +77,44 @@ func ReplacePlaceholdersInFile(placeholder, value, filePath string) error {
 	return nil
 }
 
-// Append appends a string to the end of file dst.
-func Append(data string, dst string) error {
-	dstFile, err := os.OpenFile(dst, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+func GetFileList(dir string) ([]string, error) {
+	var fileList []string
+	output, err := shell.ExecCmd("ls "+dir, true, "", nil)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s for appending: %w", dst, err)
+		return nil, fmt.Errorf("failed to list files in directory %s: %w", dir, err)
 	}
-	defer dstFile.Close()
+	for _, line := range strings.Split(output, "\n") {
+		if line == "" {
+			continue // skip empty lines
+		}
+		filesInLine := strings.Split(line, " ")
+		fileList = append(fileList, filesInLine...)
+	}
+	return fileList, nil
+}
 
-	_, err = dstFile.WriteString(data)
-	return err
+func Read(filePath string) (string, error) {
+	content, err := shell.ExecCmd("cat "+filePath, true, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return content, nil
+}
+
+func Write(data, dst string) error {
+	cmdStr := fmt.Sprintf("echo -e '%s' | sudo tee %s", data, dst)
+	if _, err := shell.ExecCmd(cmdStr, true, "", nil); err != nil {
+		return fmt.Errorf("failed to write %s to file %s: %w", data, dst, err)
+	}
+	return nil
+}
+
+func Append(data, dst string) error {
+	cmdStr := fmt.Sprintf("echo -e '%s' | sudo tee -a %s", data, dst)
+	if _, err := shell.ExecCmd(cmdStr, true, "", nil); err != nil {
+		return fmt.Errorf("failed to append %s to file %s: %w", data, dst, err)
+	}
+	return nil
 }
 
 // ReadFromJSON reads a JSON file and returns its contents as a map
@@ -208,7 +236,7 @@ func CopyFile(srcFile, dstFile, flags string, sudo bool) error {
 	}
 	dstDir := filepath.Dir(dstFilePath)
 	if _, err := os.Stat(dstDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dstDir, 0755); err != nil {
+		if _, err := shell.ExecCmd("mkdir -p "+dstDir, sudo, "", nil); err != nil {
 			return fmt.Errorf("failed to create directory for destination file: %w", err)
 		}
 	}
@@ -238,7 +266,7 @@ func CopyDir(srcDir, dstDir, flags string, sudo bool) error {
 		return fmt.Errorf("failed to get absolute path of destination directory: %w", err)
 	}
 	if _, err := os.Stat(dstDirPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(dstDirPath, 0755); err != nil {
+		if _, err := shell.ExecCmd("mkdir -p "+dstDirPath, sudo, "", nil); err != nil {
 			return fmt.Errorf("failed to create destination directory: %w", err)
 		}
 	}
