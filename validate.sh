@@ -105,9 +105,9 @@ build_elxr12_image() {
   fi
 }
 
+build_elxr12_image
 build_azl3_image
 build_emt3_image
-build_elxr12_image
 
 
 # # Check for the success message in the output
