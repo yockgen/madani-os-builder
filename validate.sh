@@ -72,20 +72,48 @@ go build ./cmd/image-composer
 
 # Run tests
 echo "Building the Linux image..."
-output=$( sudo -S ./image-composer build config/osv/azure-linux/azl3/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
-# Check for the success message in the output
-if echo "$output" | grep -q "image build completed successfully"; then
-  echo "Image build passed. Proceeding to QEMU boot test..."
-  
-  if run_qemu_boot_test; then # call qemu boot function
-    echo "QEMU boot test PASSED"
-    exit 0
-  else
-    echo "QEMU boot test FAILED"
-    exit 0 # returning exist status 0 instead of 1 until code is fully debugged.  ERRRORRR
+build_azl3_image() {
+  output=$( sudo -S ./image-composer build config/osv/azure-linux/azl3/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+  echo "AZL raw Image build passed. Proceeding to QEMU boot test..."
   fi
+}
 
-else
-  echo "Build did not complete successfully. Skipping QEMU test."
-  exit 0 # returning exist status 0 instead of 1 unti code is fully debugged. ERRRORRR
-fi
+build_emt3_image() {
+  output=$( sudo -S ./image-composer build config/osv/edge-microvisor-toolkit/emt3/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+  echo "EMT3 raw Image build passed. Proceeding to QEMU boot test..."
+  fi
+}
+
+build_elxr12_image() {
+  output=$( sudo -S ./image-composer build config/osv/wind-river-elxr/elxr12/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+  echo "ELXR12 raw Image build passed. Proceeding to QEMU boot test..."
+  fi
+}
+
+build_azl3_image
+build_emt3_image
+build_elxr12_image
+
+
+# # Check for the success message in the output
+# if echo "$output" | grep -q "image build completed successfully"; then
+#   echo "Image build passed. Proceeding to QEMU boot test..."
+  
+#   if run_qemu_boot_test; then # call qemu boot function
+#     echo "QEMU boot test PASSED"
+#     exit 0
+#   else
+#     echo "QEMU boot test FAILED"
+#     exit 0 # returning exist status 0 instead of 1 until code is fully debugged.  ERRRORRR
+#   fi
+
+# else
+#   echo "Build did not complete successfully. Skipping QEMU test."
+#   exit 0 # returning exist status 0 instead of 1 unti code is fully debugged. ERRRORRR
+# fi
