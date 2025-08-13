@@ -76,7 +76,10 @@ build_azl3_image() {
   output=$( sudo -S ./image-composer build config/osv/azure-linux/azl3/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
-  echo "AZL raw Image build passed. Proceeding to QEMU boot test..."
+  echo "AZL raw Image build passed."
+  else
+    echo "AZL raw Image build failed."
+    exit 1 # Exit with error if build fails
   fi
 }
 
@@ -84,7 +87,10 @@ build_emt3_image() {
   output=$( sudo -S ./image-composer build config/osv/edge-microvisor-toolkit/emt3/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
-  echo "EMT3 raw Image build passed. Proceeding to QEMU boot test..."
+  echo "EMT3 raw Image build passed."
+  else
+    echo "EMT3 raw Image build failed."
+    exit 1 # Exit with error if build fails
   fi
 }
 
@@ -92,7 +98,10 @@ build_elxr12_image() {
   output=$( sudo -S ./image-composer build config/osv/wind-river-elxr/elxr12/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
-  echo "ELXR12 raw Image build passed. Proceeding to QEMU boot test..."
+  echo "ELXR12 raw Image build passed."
+  else
+    echo "ELXR12 raw Image build failed."
+    exit 1 # Exit with error if build fails
   fi
 }
 
