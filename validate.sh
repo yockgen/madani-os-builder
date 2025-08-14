@@ -123,7 +123,7 @@ build_emt3_iso_image() {
 
 build_elxr12_raw_image() {
   echo "building ELXR12 raw Image."
-  output=$( sudo -S ./image-composer build config/osv/wind-river-elxr/elxr12/imageconfigs/defaultconfigs/default-raw-x86_64.yml)
+  output=$( sudo -S ./image-composer build config/osv/wind-river-elxr/elxr12/imageconfigs/defaultconfigs/default-raw-x86_64.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
 
@@ -146,12 +146,13 @@ build_elxr12_iso_image() {
   fi
 }
 
+# Call the build functions
+build_azl3_raw_image
+build_azl3_iso_image
+build_emt3_raw_image
+build_emt3_iso_image
 build_elxr12_raw_image
-#build_azl3_raw_image
-#build_azl3_iso_image
-#build_emt3_raw_image
-#build_emt3_iso_image
-#build_elxr12_iso_image
+build_elxr12_iso_image
 
 # # Check for the success message in the output
 # if echo "$output" | grep -q "image build completed successfully"; then
