@@ -6,15 +6,14 @@ import (
 	"testing"
 )
 
-var ExpectedOutput map[string][]interface{} = map[string][]interface{}{
-	"echo 'hello'":                  {"hello\n", nil},
-	"echo 'test-exec-cmd'":          {"test-exec-cmd\n", nil},
+type MockExecutor struct{}
+
+var MockExpectedOutput map[string][]interface{} = map[string][]interface{}{
 	"echo 'test-exec-cmd-override'": {"override-test\n", nil},
-	"echo 'test-exec-stream'":       {"test-exec-stream\n", nil},
 }
 
-func ExecCmdOverride(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	if output, exists := ExpectedOutput[cmdStr]; exists {
+func execCmdOverride(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	if output, exists := MockExpectedOutput[cmdStr]; exists {
 		if output[1] != nil {
 			return output[0].(string), output[1].(error)
 		} else {
@@ -25,16 +24,20 @@ func ExecCmdOverride(cmdStr string, sudo bool, chrootPath string, envVal []strin
 	}
 }
 
-func ExecCmdWithInputOverride(inputStr string, cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	if output, exists := ExpectedOutput[cmdStr]; exists {
-		if output[1] != nil {
-			return output[0].(string), output[1].(error)
-		} else {
-			return output[0].(string), nil
-		}
-	} else {
-		return "", fmt.Errorf("Unexpected command for override: %s", cmdStr)
-	}
+func (m *MockExecutor) ExecCmd(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	return execCmdOverride(cmdStr, sudo, chrootPath, envVal)
+}
+
+func (m *MockExecutor) ExecCmdSilent(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	return execCmdOverride(cmdStr, sudo, chrootPath, envVal)
+}
+
+func (m *MockExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	return execCmdOverride(cmdStr, sudo, chrootPath, envVal)
+}
+
+func (m *MockExecutor) ExecCmdWithInput(inputStr string, cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	return execCmdOverride(cmdStr, sudo, chrootPath, envVal)
 }
 
 func TestGetFullCmdStr(t *testing.T) {
@@ -78,9 +81,9 @@ func TestExecCmdWithInput(t *testing.T) {
 }
 
 func TestExecCmdOverride(t *testing.T) {
-	var originalExecCmd = ExecCmd
-	defer func() { ExecCmd = originalExecCmd }()
-	ExecCmd = ExecCmdOverride
+	originalExecutor := Default
+	defer func() { Default = originalExecutor }()
+	Default = &MockExecutor{}
 	out, err := ExecCmd("echo 'test-exec-cmd-override'", true, HostPath, nil)
 	if err != nil {
 		t.Fatalf("ExecCmd with override failed: %v", err)
@@ -91,9 +94,9 @@ func TestExecCmdOverride(t *testing.T) {
 }
 
 func TestExecCmdSilentOverride(t *testing.T) {
-	var originalExecCmd = ExecCmdSilent
-	defer func() { ExecCmdSilent = originalExecCmd }()
-	ExecCmdSilent = ExecCmdOverride
+	originalExecutor := Default
+	defer func() { Default = originalExecutor }()
+	Default = &MockExecutor{}
 	out, err := ExecCmdSilent("echo 'test-exec-cmd-override'", false, HostPath, nil)
 	if err != nil {
 		t.Fatalf("ExecCmd with silent override failed: %v", err)
@@ -104,9 +107,9 @@ func TestExecCmdSilentOverride(t *testing.T) {
 }
 
 func TestExecCmdWithStreamOverride(t *testing.T) {
-	var originalExecCmd = ExecCmdWithStream
-	defer func() { ExecCmdWithStream = originalExecCmd }()
-	ExecCmdWithStream = ExecCmdOverride
+	originalExecutor := Default
+	defer func() { Default = originalExecutor }()
+	Default = &MockExecutor{}
 	out, err := ExecCmdWithStream("echo 'test-exec-cmd-override'", true, HostPath, nil)
 	if err != nil {
 		t.Fatalf("ExecCmdWithStream with override failed: %v", err)
@@ -117,9 +120,9 @@ func TestExecCmdWithStreamOverride(t *testing.T) {
 }
 
 func TestExecCmdWithInputOverride(t *testing.T) {
-	var originalExecCmd = ExecCmdWithInput
-	defer func() { ExecCmdWithInput = originalExecCmd }()
-	ExecCmdWithInput = ExecCmdWithInputOverride
+	originalExecutor := Default
+	defer func() { Default = originalExecutor }()
+	Default = &MockExecutor{}
 	out, err := ExecCmdWithInput("input-line", "echo 'test-exec-cmd-override'", true, HostPath, nil)
 	if err != nil {
 		t.Fatalf("ExecCmdWithInput with override failed: %v", err)
