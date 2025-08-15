@@ -133,14 +133,10 @@ The dependency resolution system ensures package consistency by maintaining repo
 
 This dependency resolution strategy maintains package integrity while supporting the multi-repository architecture.
 
-### Architectural Design:
-The design integrates with ICT's existing package and dependency pre-download framework,
+## C. Architectural Design:
+The design integrates with ICT's existing package and dependency pre-download framework. The core concept is to build a metadata list of all available packages from a single repository, this list only containing one repo metadata, and using it as a "database" to validate user package requests and resolve dependencies at each subsequence step. The high-level flow is described below:
 
-<div style="display: flex; gap: 20px; flex-wrap: wrap;">
-
-<div style="flex: 1; min-width: 300px;">
-
-**Single Repository Flow (Original)**
+**Single Repository Flow (Original/Current)**
 ```mermaid
 graph TD
     A[Base Repo Metadata] --> B(full package list)
@@ -156,9 +152,9 @@ graph TD
     H --> I[Validate package signatures]
 ```
 
-</div>
+### Multi Repositories Support
 
-<div style="flex: 1; min-width: 300px;">
+The enhanced design extends ICT's package and dependency pre-download framework to support multiple repositories. Instead of building a metadata list from a single source, ICT aggregates metadata from all configured repositories into a unified package database. This consolidated list enables validation of user package requests and accurate dependency resolution across repositories. The high-level flow remains similar, but now operates on combined metadata, ensuring seamless multi-repo support. The high-level flow is described below:
 
 **Multiple Repository Flow (Enhanced)**
 ```mermaid
@@ -173,7 +169,7 @@ graph TD
         D(Full package list with multiple repos)
         E[User Package List]
         F{Check if user list is available?}
-        G[Resolve dependencies]
+        G[Resolve dependencies and version conflicting]
         H["Create full download list<br> (user packages + dependencies)"]
         I[Download packages]
         J[Validate package signatures]
@@ -198,6 +194,14 @@ graph TD
     I --> J
 ```
 
-</div>
+#### Benefits of the Design:
 
-</div>
+1. **Framework Compatibility**: The design adheres to ICT's current package downloading framework, ensuring seamless integration with subsequent image build steps without disrupting existing workflows.
+
+2. **Minimal Code Changes**: The implementation maximizes code reuse by extending existing logic with multi-repository support, making changes atomic and reducing the risk of introducing bugs.
+
+3. **Package Manager Independence**: ICT's package downloading framework remains independent of third-party package managers (such as APT, DNF, etc.), guaranteeing flexibility for future customizations and non-traditional requirements.
+
+4. **Maintainability**: By building upon the existing architecture, the solution reduces complexity and maintains consistency with established patterns, making it easier to maintain and extend.
+
+5. **Backward Compatibility**: The enhanced design preserves full compatibility with single-repository configurations, ensuring existing deployments continue to work without modification.
