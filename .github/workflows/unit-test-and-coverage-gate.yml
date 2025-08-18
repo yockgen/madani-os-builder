@@ -14,7 +14,6 @@ on:
         description: "Override coverage threshold (percent)"
         required: false
 
-# Prevent overlapping runs on the same ref
 concurrency:
   group: earthly-tests-${{ github.ref }}
   cancel-in-progress: true
@@ -29,7 +28,7 @@ jobs:
     timeout-minutes: 30
 
     env:
-      # Effective coverage threshold resolution (inputs > repo vars > default)
+      # inputs > repo vars > default
       COV_THRESHOLD: ${{ inputs.cov_threshold != '' && inputs.cov_threshold || (vars.COV_THRESHOLD != '' && vars.COV_THRESHOLD || '70') }}
       PRINT_TS: ${{ github.run_id }}
 
@@ -37,22 +36,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Use input ref if provided; else PR head SHA; else current SHA
           ref: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha) }}
 
       - name: Setup Earthly
         uses: earthly/actions/setup-earthly@v1
         with:
-          version: "latest"      # or pin a version like "0.8.10"
+          version: "latest"
 
       - name: Show Earthly version
         run: earthly --version
 
+      # 🔧 Key change: no "--ci" (to permit LOCALLY and local outputs)
       - name: Run Earthly +test with coverage threshold
         run: |
-          earthly --ci +test --COV_THRESHOLD="${COV_THRESHOLD}" --PRINT_TS="${PRINT_TS}"
+          earthly +test --COV_THRESHOLD="${COV_THRESHOLD}" --PRINT_TS="${PRINT_TS}"
 
-      # Always upload artifacts for debugging / auditing
+      # Always upload artifacts
       - name: Upload coverage.out
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,7 +80,6 @@ jobs:
           name: test_raw.log
           path: test_raw.log
 
-      # Optional: write a short summary to the job page
       - name: Publish coverage summary
         if: always()
         run: |
@@ -95,10 +93,9 @@ jobs:
             fi
             if [[ -f coverage_packages.txt ]]; then
               echo ""
-              echo "Top packages by coverage (lowest first):"
+              echo "Packages by coverage (lowest first):"
               echo '```'
               head -n 20 coverage_packages.txt || true
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-
