@@ -1,0 +1,104 @@
+name: Earthly Tests (coverage gate)
+
+on:
+  pull_request:
+    branches: [ main ]         # Runs automatically for PRs into main
+  push:
+    branches: [ main ]         # Runs on direct pushes to main
+  workflow_dispatch:           # Allows manual runs for any branch/SHA
+    inputs:
+      ref:
+        description: "Branch or SHA to test (e.g. feature/x or a1b2c3)"
+        required: false
+      cov_threshold:
+        description: "Override coverage threshold (percent)"
+        required: false
+
+# Prevent overlapping runs on the same ref
+concurrency:
+  group: earthly-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  run-earthly-tests:
+    name: Run earthly +test (coverage gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Effective coverage threshold resolution (inputs > repo vars > default)
+      COV_THRESHOLD: ${{ inputs.cov_threshold != '' && inputs.cov_threshold || (vars.COV_THRESHOLD != '' && vars.COV_THRESHOLD || '70') }}
+      PRINT_TS: ${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use input ref if provided; else PR head SHA; else current SHA
+          ref: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha) }}
+
+      - name: Setup Earthly
+        uses: earthly/actions/setup-earthly@v1
+        with:
+          version: "latest"      # or pin a version like "0.8.10"
+
+      - name: Show Earthly version
+        run: earthly --version
+
+      - name: Run Earthly +test with coverage threshold
+        run: |
+          earthly --ci +test --COV_THRESHOLD="${COV_THRESHOLD}" --PRINT_TS="${PRINT_TS}"
+
+      # Always upload artifacts for debugging / auditing
+      - name: Upload coverage.out
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.out
+          path: coverage.out
+
+      - name: Upload coverage_total.txt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage_total.txt
+          path: coverage_total.txt
+
+      - name: Upload coverage_packages.txt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage_packages.txt
+          path: coverage_packages.txt
+
+      - name: Upload test_raw.log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_raw.log
+          path: test_raw.log
+
+      # Optional: write a short summary to the job page
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          {
+            echo "## Coverage Summary"
+            if [[ -f coverage_total.txt ]]; then
+              echo ""
+              echo '```'
+              cat coverage_total.txt
+              echo '```'
+            fi
+            if [[ -f coverage_packages.txt ]]; then
+              echo ""
+              echo "Top packages by coverage (lowest first):"
+              echo '```'
+              head -n 20 coverage_packages.txt || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
