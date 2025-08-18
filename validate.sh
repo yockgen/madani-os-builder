@@ -146,6 +146,45 @@ build_elxr12_iso_image() {
   fi
 }
 
+build_elxr12_secure_raw_image() {
+  echo "building ELXR12 secure raw Image."
+  output=$( sudo -S ./image-composer build testData/elxr12/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+
+    echo "ELXR12 secure raw Image build passed."
+  else
+    echo "ELXR12 secure raw Image build failed."
+    exit 1 # Exit with error if build fails
+  fi
+}
+
+build_emt3_secure_raw_image() {
+  echo "building EMT3 secure raw Image."
+  output=$( sudo -S ./image-composer build testData/emt3/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+
+    echo "EMT3 secure raw Image build passed."
+  else
+    echo "EMT3 secure raw Image build failed."
+    exit 1 # Exit with error if build fails
+  fi
+}
+
+build_azl3_secure_raw_image() {
+  echo "building AZL3 secure raw Image."
+  output=$( sudo -S ./image-composer build testData/azl3/default-raw-x86_64.yml 2>&1)
+  # Check for the success message in the output
+  if echo "$output" | grep -q "image build completed successfully"; then
+
+    echo "AZL3 secure raw Image build passed."
+  else
+    echo "AZL3 secure raw Image build failed."
+    exit 1 # Exit with error if build fails
+  fi
+}
+
 clean_build_dirs() {
   echo "Cleaning build directories: cache/ and tmp/"
   sudo rm -rf cache/ tmp/
@@ -168,6 +207,15 @@ build_elxr12_raw_image
 
 clean_build_dirs
 build_elxr12_iso_image
+
+clean_build_dirs
+build_elxr12_secure_raw_image
+
+clean_build_dirs
+build_emt3_secure_raw_image
+
+clean_build_dirs
+build_azl3_secure_raw_image
 
 # # Check for the success message in the output
 # if echo "$output" | grep -q "image build completed successfully"; then
