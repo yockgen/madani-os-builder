@@ -75,7 +75,7 @@ jobs:
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
             git fetch --no-tags --depth=1 origin "${BASE_REF}"
             if git cat-file -e "origin/${BASE_REF}:${FILE}" 2>/dev/null; then
-              BASE_VAL="$(git show "origin/${BASE_REF}:${FILE}" | parse_num)"
+              BASE_VAL="$(parse_num < <(git show "origin/${BASE_REF}:${FILE}"))"
               if [[ -n "${BASE_VAL}" ]]; then
                 awk -v head="$HEAD_VAL" -v base="$BASE_VAL" 'BEGIN{
                   # fail if head < base
