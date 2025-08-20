@@ -231,5 +231,5 @@ build_azl3_secure_raw_image
 
 # else
 #   echo "Build did not complete successfully. Skipping QEMU test."
-#   exit 0 # returning exist status 0 instead of 1 unti code is fully debugged. ERRRORRR
+#   exit 1 
 # fi
