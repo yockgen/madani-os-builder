@@ -574,37 +574,36 @@ func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (st
 	var prefix string
 	log := logger.Logger()
 	log.Infof("Getting image version info for: %s", template.GetImageName())
-	imageVersionFilePath := filepath.Join(installRoot, "etc", "os-release")
-	if _, err := os.Stat(imageVersionFilePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("os-release file does not exist: %s", imageVersionFilePath)
-	}
-	content, err := file.Read(imageVersionFilePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read image version file: %w", err)
-	}
 
 	switch config.TargetOs {
 	case "azure-linux", "edge-microvisor-toolkit":
-		prefix = "VERSION="
-	case "wind-river-elxr":
-		prefix = "VERSION_ID="
-	default:
-		prefix = "VERSION_ID="
-	}
-	// Parse the content to extract version information
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, prefix) {
-			// Remove prefix, quotes and trim whitespace
-			line = strings.TrimPrefix(line, prefix)
-			versionInfo = strings.TrimSpace(strings.Trim(line, "\""))
+		imageVersionFilePath := filepath.Join(installRoot, "etc", "os-release")
+		if _, err := os.Stat(imageVersionFilePath); os.IsNotExist(err) {
+			return "", fmt.Errorf("os-release file does not exist: %s", imageVersionFilePath)
 		}
+		content, err := file.Read(imageVersionFilePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read image version file: %w", err)
+		}
+		prefix = "VERSION="
+		// Parse the content to extract version information
+		lines := strings.Split(content, "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, prefix) {
+				// Remove prefix, quotes and trim whitespace
+				line = strings.TrimPrefix(line, prefix)
+				versionInfo = strings.TrimSpace(strings.Trim(line, "\""))
+			}
+		}
+		if versionInfo == "" {
+			log.Debugf("Version info not found in %s", imageVersionFilePath)
+		}
+	default:
+		versionInfo = chroot.GetTargetOsReleaseVersion()
 	}
-	if versionInfo == "" {
-		log.Debugf("Version info not found in %s", imageVersionFilePath)
-	} else {
-		log.Infof("Extracted version info: %s", versionInfo)
-	}
+
+	log.Infof("Extracted version info: %s", versionInfo)
+
 	return versionInfo, nil
 }
 

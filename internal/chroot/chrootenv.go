@@ -155,12 +155,12 @@ func RefreshLocalCacheRepo() error {
 	chrootRepoDir := "/cdrom/cache-repo"
 	pkgType := GetTargetOsPkgType()
 	if pkgType == "rpm" {
-		releaseMajor := GetTargetOsReleaseMajor()
+		releaseVersion := GetTargetOsReleaseVersion()
 		if err := updateChrootLocalRPMRepo(chrootRepoDir); err != nil {
 			return fmt.Errorf("failed to update rpm local cache repository %s: %w", chrootRepoDir, err)
 		}
 
-		cmd := fmt.Sprintf("tdnf makecache --releasever %s", releaseMajor)
+		cmd := fmt.Sprintf("tdnf makecache --releasever %s", releaseVersion)
 		if _, err := shell.ExecCmdWithStream(cmd, true, ChrootEnvRoot, nil); err != nil {
 			return fmt.Errorf("failed to refresh cache for chroot repository: %w", err)
 		}
@@ -365,9 +365,9 @@ func TdnfInstallPackage(packageName, installRoot string, repositoryIDList []stri
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path for install root %s: %w", installRoot, err)
 	}
-	releaseMajor := GetTargetOsReleaseMajor()
+	releaseVersion := GetTargetOsReleaseVersion()
 	installCmd = fmt.Sprintf("tdnf install %s --releasever %s --setopt reposdir=/etc/yum.repos.d/ --nogpgcheck --assumeyes --installroot %s",
-		packageName, releaseMajor, chrootInstallRoot)
+		packageName, releaseVersion, chrootInstallRoot)
 
 	if len(repositoryIDList) > 0 {
 		installCmd += " --disablerepo=*"

@@ -3,4 +3,4 @@ x86_64:
   arch: x86_64
   pkgType: rpm
   chrootenvConfigFile: chrootenvconfigs/chrootenv_x86_64.yml
-  releaseMajor: "3.0"
+  releaseVersion: "3.0"

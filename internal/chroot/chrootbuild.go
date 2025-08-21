@@ -159,12 +159,12 @@ func GetTargetOsPkgType() string {
 	return pkgType.(string)
 }
 
-func GetTargetOsReleaseMajor() string {
-	releaseMajor, ok := TargetOsConfig["releaseMajor"]
+func GetTargetOsReleaseVersion() string {
+	releaseVersion, ok := TargetOsConfig["releaseVersion"]
 	if !ok {
 		return "unknown"
 	}
-	return releaseMajor.(string)
+	return releaseVersion.(string)
 }
 
 func getChrootEnvConfig() (map[interface{}]interface{}, error) {

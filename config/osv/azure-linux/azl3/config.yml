@@ -3,11 +3,11 @@ x86_64:
   arch: x86_64
   pkgType: rpm
   chrootenvConfigFile: chrootenvconfigs/chrootenv_x86_64.yml
-  releaseMajor: "3.0"
+  releaseVersion: "3.0"
 
 aarch64:
   dist: azl3
   arch: aarch64
   pkgType: rpm
   chrootenvConfigFile: chrootenvconfigs/chrootenv_aarch64.yml
-  releaseMajor: "3.0"
+  releaseVersion: "3.0"
