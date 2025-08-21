@@ -382,7 +382,6 @@ func (d *DefaultExecutor) ExecCmdSilent(cmdStr string, sudo bool, chrootPath str
 
 // ExecCmdWithStream executes a command and streams its output
 func (d *DefaultExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	var outputStr string
 	log := logger.Logger()
 
 	fullCmdStr, err := GetFullCmdStr(cmdStr, sudo, chrootPath, envVal)
@@ -403,17 +402,29 @@ func (d *DefaultExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath
 		return "", fmt.Errorf("failed to start command %s: %w", fullCmdStr, err)
 	}
 
-	// Stream output in goroutines
+	// Use channels to collect output safely
+	outputChan := make(chan string) // Unbuffered channel
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
+
+	// Collect output immediately in a dedicated goroutine
+	var outputStr strings.Builder
+	go func() {
+		defer wg.Done()
+		for output := range outputChan {
+			outputStr.WriteString(output)
+			outputStr.WriteString("\n") // Add newlines between lines
+		}
+	}()
 
 	go func() {
 		defer wg.Done()
+		defer close(outputChan)
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			str := scanner.Text()
 			if str != "" {
-				outputStr += str
+				outputChan <- str
 				log.Debugf(str)
 			}
 		}
@@ -433,10 +444,10 @@ func (d *DefaultExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath
 	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
-		return outputStr, fmt.Errorf("failed to wait for command %s: %w", fullCmdStr, err)
+		return outputStr.String(), fmt.Errorf("failed to wait for command %s: %w", fullCmdStr, err)
 	}
 
-	return outputStr, nil
+	return outputStr.String(), nil
 }
 
 // ExecCmdWithInput executes a command with input string
