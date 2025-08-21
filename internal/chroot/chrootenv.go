@@ -21,18 +21,21 @@ var (
 
 func GetChrootEnvHostPath(chrootPath string) (string, error) {
 	if ChrootEnvRoot == "" {
-		return "", fmt.Errorf("chroot env may not initialized")
+		log.Errorf("Chroot env is not initialized")
+		return "", fmt.Errorf("chroot env is not initialized")
 	}
 	return filepath.Join(ChrootEnvRoot, chrootPath), nil
 }
 
 func GetChrootEnvPath(ChrootEnvHostPath string) (string, error) {
 	if ChrootEnvRoot == "" {
-		return "", fmt.Errorf("chroot env may not initialized")
+		log.Errorf("Chroot env is not initialized")
+		return "", fmt.Errorf("chroot env is not initialized")
 	}
 	isSubPath, err := file.IsSubPath(ChrootEnvRoot, ChrootEnvHostPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to check if path %s is a subpath of chroot env root %s: %w",
+		log.Errorf("Failed to check if path %s is a subpath of chroot env root %s: %v", ChrootEnvHostPath, ChrootEnvRoot, err)
+		return "", fmt.Errorf("failed to check if path %s is a subpath of chroot env root %s: %v",
 			ChrootEnvHostPath, ChrootEnvRoot, err)
 	}
 	if !isSubPath {

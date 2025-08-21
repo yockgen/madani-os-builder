@@ -16,6 +16,7 @@ import (
 
 var (
 	HostPath string = ""
+	log             = logger.Logger()
 )
 
 var commandMap = map[string]string{
@@ -157,7 +158,6 @@ func GetOSProxyEnvirons() map[string]string {
 // IsCommandExist checks if a command exists in the system or in a chroot environment
 func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 	var cmdStr string
-	log := logger.Logger()
 	if chrootPath != HostPath {
 		cmdStr = "sudo chroot " + chrootPath + " /bin/sh -c 'command -v " + cmd + "'"
 	} else {
@@ -170,8 +170,7 @@ func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 		if len(output) == 0 {
 			return false, nil
 		}
-		log.Errorf("failed to execute command %s: output %s, err %v", cmdStr, output, err)
-		return false, fmt.Errorf("failed to execute command %s: %w", cmdStr, err)
+		return false, fmt.Errorf("failed to execute command %s: output %s, err %w", cmdStr, output, err)
 	}
 	return true, nil
 }
@@ -296,7 +295,6 @@ func verifyCmdWithFullPath(cmd string) (string, error) {
 // GetFullCmdStr prepares a command string with necessary prefixes
 func GetFullCmdStr(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
 	var fullCmdStr string
-	log := logger.Logger()
 	envValStr := ""
 	for _, env := range envVal {
 		envValStr += env + " "
@@ -343,7 +341,6 @@ func GetFullCmdStr(cmdStr string, sudo bool, chrootPath string, envVal []string)
 
 // ExecCmd executes a command and returns its output
 func (d *DefaultExecutor) ExecCmd(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	log := logger.Logger()
 	fullCmdStr, err := GetFullCmdStr(cmdStr, sudo, chrootPath, envVal)
 	if err != nil {
 		return "", fmt.Errorf("failed to get full command string: %w", err)
@@ -355,11 +352,10 @@ func (d *DefaultExecutor) ExecCmd(cmdStr string, sudo bool, chrootPath string, e
 
 	if err != nil {
 		if outputStr != "" {
-			log.Errorf("failed to exec %s: output %s, err %v", fullCmdStr, outputStr, err)
+			return outputStr, fmt.Errorf("failed to exec %s: output %s, err %w", fullCmdStr, outputStr, err)
 		} else {
-			log.Errorf("failed to exec %s: %v", fullCmdStr, err)
+			return outputStr, fmt.Errorf("failed to exec %s: %w", fullCmdStr, err)
 		}
-		return outputStr, fmt.Errorf("failed to exec %s: %w", fullCmdStr, err)
 	} else {
 		if outputStr != "" {
 			log.Debugf(outputStr)
@@ -382,8 +378,6 @@ func (d *DefaultExecutor) ExecCmdSilent(cmdStr string, sudo bool, chrootPath str
 
 // ExecCmdWithStream executes a command and streams its output
 func (d *DefaultExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	log := logger.Logger()
-
 	fullCmdStr, err := GetFullCmdStr(cmdStr, sudo, chrootPath, envVal)
 	if err != nil {
 		return "", fmt.Errorf("failed to get full command string: %w", err)
@@ -452,7 +446,6 @@ func (d *DefaultExecutor) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath
 
 // ExecCmdWithInput executes a command with input string
 func (d *DefaultExecutor) ExecCmdWithInput(inputStr string, cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
-	log := logger.Logger()
 	fullCmdStr, err := GetFullCmdStr(cmdStr, sudo, chrootPath, envVal)
 	if err != nil {
 		return "", fmt.Errorf("failed to get full command string: %w", err)
