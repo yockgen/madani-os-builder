@@ -571,7 +571,6 @@ func updateImageConfig(installRoot string, diskPathIdMap map[string]string, temp
 
 func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (string, error) {
 	var versionInfo string
-	var prefix string
 	log := logger.Logger()
 	log.Infof("Getting image version info for: %s", template.GetImageName())
 
@@ -585,14 +584,14 @@ func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (st
 		if err != nil {
 			return "", fmt.Errorf("failed to read image version file: %w", err)
 		}
-		prefix = "VERSION="
 		// Parse the content to extract version information
 		lines := strings.Split(content, "\n")
 		for _, line := range lines {
-			if strings.HasPrefix(line, prefix) {
+			if strings.HasPrefix(line, "VERSION=") {
 				// Remove prefix, quotes and trim whitespace
-				line = strings.TrimPrefix(line, prefix)
-				versionInfo = strings.TrimSpace(strings.Trim(line, "\""))
+				value := strings.TrimPrefix(line, "VERSION=")
+				versionInfo = strings.TrimSpace(strings.Trim(value, "\""))
+				break
 			}
 		}
 		if versionInfo == "" {

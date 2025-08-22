@@ -156,7 +156,10 @@ func GetTargetOsPkgType() string {
 	if !ok {
 		return "unknown"
 	}
-	return pkgType.(string)
+	if s, ok := pkgType.(string); ok {
+		return s
+	}
+	return "unknown"
 }
 
 func GetTargetOsReleaseVersion() string {
@@ -164,7 +167,10 @@ func GetTargetOsReleaseVersion() string {
 	if !ok {
 		return "unknown"
 	}
-	return releaseVersion.(string)
+	if s, ok := releaseVersion.(string); ok {
+		return s
+	}
+	return "unknown"
 }
 
 func getChrootEnvConfig() (map[interface{}]interface{}, error) {
