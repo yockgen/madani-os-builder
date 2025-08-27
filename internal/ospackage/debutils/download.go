@@ -102,7 +102,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 				RepoGPGCheck: true,
 				Enabled:      true,
 				PbGPGKey:     pkey,
-				BuildPath:    fmt.Sprintf("./builds/elxr_%s", arch),
+				BuildPath:    fmt.Sprintf("./builds/%s_%s", id, arch),
 				Arch:         arch,
 			}
 			userRepo = append(userRepo, repo)
