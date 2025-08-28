@@ -14,10 +14,9 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
 )
 
-var (
-	HostPath string = ""
-	log             = logger.Logger()
-)
+const HostPath string = ""
+
+var log = logger.Logger()
 
 var commandMap = map[string]string{
 	"apt":                "/usr/bin/apt",
