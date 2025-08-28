@@ -288,30 +288,6 @@ func ResolvePackageInfos(requested []ospackage.PackageInfo, all []ospackage.Pack
 			candidates := findAllCandidates(depName, all)
 			if len(candidates) >= 1 {
 
-				//yockgen: debug info
-				if cur.Name == "mypackagea" {
-
-					outFile := "/data/yockgen/all-elxr.txt"
-					f, err := os.OpenFile(outFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if err == nil {
-						defer f.Close()
-						for _, pi := range all {
-							// Write each PackageInfo in a readable format
-							fmt.Fprintf(f, "Name: %s\n", pi.Name)
-							fmt.Fprintf(f, "Version: %s\n", pi.Version)
-							fmt.Fprintf(f, "Type: %s\n", pi.Type)
-							fmt.Fprintf(f, "URL: %s\n", pi.URL)
-							fmt.Fprintf(f, "Description: %s\n", pi.Description)
-							fmt.Fprintf(f, "Arch: %s\n", pi.Arch)
-							fmt.Fprintf(f, "Origin: %s\n", pi.Origin)
-							fmt.Fprintf(f, "Requires: %v\n", pi.Requires)
-							fmt.Fprintf(f, "Provides: %v\n", pi.Provides)
-							fmt.Fprintf(f, "Checksums: %v\n", pi.Checksums)
-							fmt.Fprintf(f, "-----------------------------\n")
-						}
-					}
-				}
-
 				// Pick the candidate using the resolver and add it to the queue
 				chosenCandidate, err := resolveMultiCandidates(cur, candidates)
 				if err != nil {
@@ -653,25 +629,6 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	//A: if version is specified
 	/////////////////////////////////////
 
-	// if parentPkg.Name == "mypackagea" {
-
-	// 	for _, candidate := range candidates {
-	// 		fmt.Printf("\ncandidate: %s, version: %s\n", candidate.Name, candidate.Version)
-	// 	}
-
-	// 	fmt.Printf("yockgen:\n\n parentPkg:\n")
-	// 	fmt.Printf("  Name: %s\n", parentPkg.Name)
-	// 	fmt.Printf("  Version: %s\n", parentPkg.Version)
-	// 	fmt.Printf("  Type: %s\n", parentPkg.Type)
-	// 	fmt.Printf("  URL: %s\n", parentPkg.URL)
-	// 	fmt.Printf("  Description: %s\n", parentPkg.Description)
-	// 	fmt.Printf("  Arch: %s\n", parentPkg.Arch)
-	// 	fmt.Printf("  Origin: %s\n", parentPkg.Origin)
-	// 	fmt.Printf("  Requires: %v\n", parentPkg.Requires)
-	// 	fmt.Printf("  RequiresVer: %v\n", parentPkg.RequiresVer)
-	// 	fmt.Printf("  Provides: %v\n", parentPkg.Provides)
-	// 	fmt.Printf("  Checksums: %v\n\n", parentPkg.Checksums)
-
 	op, ver, found := verfiyVersionRequirementMet(parentPkg.RequiresVer, candidates[0].Name)
 	fmt.Printf("verfiyVersionRequirementMet: package=%s op=%s, ver=%s, found=%v\n", candidates[0].Name, op, ver, found)
 
@@ -700,20 +657,6 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	if selectedCandidate.Name != "" {
 		return selectedCandidate, nil
 	}
-
-	// 	fmt.Printf("Selected candidate: Name=%s, Version=%s\n", selectedCandidate.Name, selectedCandidate.Version)
-	// 	fmt.Printf("\n\n")
-
-	// 	return ospackage.PackageInfo{}, fmt.Errorf("yockgen yockgen yockgen::multiple candidates (%d) found for dependency %q of package %q, see /data/yockgen/depedencies.txt for details", len(candidates), parentPkg.Name, parentPkg.Name)
-	// }
-
-	//compareDebianVersions("6.6.4-5+b1", "7.6.4-5+b1")
-	// -1 = left < right
-	//0 rqual
-	// 1 = left > right
-	//if -1
-	//    string ([acct (= 6.6.4-5+b1)] == "=" ) false
-	//        string ([acct (< 6.6.4-5+b1)] == "<" ) false
 
 	/////////////////////////////////////
 	// B: if version is not specificied
