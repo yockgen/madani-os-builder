@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,16 +69,22 @@ func TestInstallCompletion_ZshWritesToHome(t *testing.T) {
 }
 
 // findAnyFileUnder returns true if any file exists under root that satisfies match(name)
-func findAnyFileUnder(root string, match func(string) bool) bool {
+func findAnyFileUnder(root string, match func(string) bool) (bool, error) {
 	found := false
-	filepath.WalkDir(root, func(path string, d os.DirEntry, _ error) error {
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
 		if !d.IsDir() && match(filepath.Base(path)) {
 			found = true
-			return filepath.SkipDir
+			// No way to stop immediately other than returning a non-nil; just continue.
 		}
 		return nil
 	})
-	return found
+	if err != nil && !errors.Is(err, fs.SkipDir) {
+		return false, err
+	}
+	return found, nil
 }
 
 func runCompletionFor(t *testing.T, shell string) {
@@ -103,8 +111,12 @@ func runCompletionFor(t *testing.T, shell string) {
 				name == "_image-composer" || // zsh
 				name == "image-composer") // some distros use no extension
 	}
-	if ok := findAnyFileUnder(tmp, want); !ok {
-		t.Fatalf("expected a completion file to be created under HOME for shell %s", shell)
+	ok, err := findAnyFileUnder(tmp, want)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected a completion file ...")
 	}
 }
 

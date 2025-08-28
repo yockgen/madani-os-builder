@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -24,9 +23,9 @@ func (f *fakeProvider) Name(dist, arch string) string {
 	return azl.GetProviderId(dist, arch)
 }
 
-func (f *fakeProvider) Init(dist, arch string) error                  { f.inited = true; return nil }
-func (f *fakeProvider) PreProcess(t *config.ImageTemplate) error     { f.pre = true; return nil }
-func (f *fakeProvider) BuildImage(t *config.ImageTemplate) error     { f.built = true; return nil }
+func (f *fakeProvider) Init(dist, arch string) error             { f.inited = true; return nil }
+func (f *fakeProvider) PreProcess(t *config.ImageTemplate) error { f.pre = true; return nil }
+func (f *fakeProvider) BuildImage(t *config.ImageTemplate) error { f.built = true; return nil }
 func (f *fakeProvider) PostProcess(t *config.ImageTemplate, err error) error {
 	f.post = true
 	return nil
