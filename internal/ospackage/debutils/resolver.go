@@ -630,9 +630,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	//A: if version is specified
 	/////////////////////////////////////
 
-	op, ver, found := verifyVersionRequirementMet(parentPkg.RequiresVer, candidates[0].Name)
-	fmt.Printf("verfiyVersionRequirementMet: package=%s op=%s, ver=%s, found=%v\n", candidates[0].Name, op, ver, found)
-
+	op, ver, _ := verifyVersionRequirementMet(parentPkg.RequiresVer, candidates[0].Name)
 	var selectedCandidate ospackage.PackageInfo
 	for _, candidate := range candidates {
 		cmp, err := compareDebianVersions(candidate.Version, ver)
