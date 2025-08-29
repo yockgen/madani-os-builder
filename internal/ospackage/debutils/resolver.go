@@ -205,11 +205,10 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	return pkgs, nil
 }
 
-// ResolvePackageInfos takes a seed list of PackageInfos (the exact versions
+// ResolveDependencies takes a seed list of PackageInfos (the exact versions
 // matched) and the full list of all PackageInfos from the repo, and
 // returns the minimal closure of PackageInfos needed to satisfy all Requires.
-func ResolvePackageInfos(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
-
+func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
 	// Build maps for fast lookup
 	byNameVer := make(map[string]ospackage.PackageInfo, len(all))
 	byProvides := make(map[string]ospackage.PackageInfo)
