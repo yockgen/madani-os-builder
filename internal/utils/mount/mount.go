@@ -12,6 +12,8 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/utils/slice"
 )
 
+var log = logger.Logger()
+
 func GetMountPathList() ([]string, error) {
 	var mountPathList []string
 	output, err := shell.ExecCmdSilent("mount", false, "", nil)
@@ -62,7 +64,6 @@ func IsMountPathExist(mountPoint string) (bool, error) {
 
 // MountPath mounts a target path to a mount point with specific flags
 func MountPath(targetPath, mountPoint, mountFlags string) error {
-	log := logger.Logger()
 	if _, err := os.Stat(mountPoint); os.IsNotExist(err) {
 		if _, err := shell.ExecCmd("mkdir -p "+mountPoint, true, "", nil); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountPoint, err)
@@ -86,7 +87,6 @@ func MountPath(targetPath, mountPoint, mountFlags string) error {
 }
 
 func umountPath(mountPoint string) error {
-	log := logger.Logger()
 	// Try different unmount strategies with increasing aggressiveness
 	unmountStrategies := []struct {
 		cmd  string
@@ -110,7 +110,6 @@ func umountPath(mountPoint string) error {
 }
 
 func UmountPath(mountPoint string) error {
-	log := logger.Logger()
 	pathExist, err := IsMountPathExist(mountPoint)
 	if err != nil {
 		return fmt.Errorf("failed to check if mount point %s exists: %w", mountPoint, err)
@@ -127,7 +126,7 @@ func UmountAndDeletePath(mountPoint string) error {
 		return fmt.Errorf("failed to unmount %s: %w", mountPoint, err)
 	}
 	if _, err := shell.ExecCmd("rm -rf "+mountPoint, true, "", nil); err != nil {
-		return fmt.Errorf("failed to remove mount point directory %s:%v", mountPoint, err)
+		return fmt.Errorf("failed to remove mount point directory %s: %w", mountPoint, err)
 	}
 	return nil
 }
@@ -197,7 +196,6 @@ func MountSysfs(mountPoint string) error {
 // UmountSysfs unmounts system directories from the chroot environment
 func UmountSysfs(mountPoint string) error {
 	var pathList []string
-	log := logger.Logger()
 	mountPathList, err := GetMountPathList()
 	if err != nil {
 		return fmt.Errorf("failed to get mount path list: %w", err)
@@ -234,7 +232,6 @@ func UmountSysfs(mountPoint string) error {
 // CleanSysfs cleans up system directories in the chroot environment
 func CleanSysfs(mountPoint string) error {
 	var pathList []string
-	log := logger.Logger()
 	mountPathList, err := GetMountPathList()
 	if err != nil {
 		return fmt.Errorf("failed to get mount path list: %w", err)

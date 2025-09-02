@@ -21,184 +21,188 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/utils/shell"
 )
 
-func InstallInitrd(template *config.ImageTemplate) (string, string, error) {
+type ImageOs struct {
+	installRoot string
+	chrootEnv   *chroot.ChrootEnv
+	template    *config.ImageTemplate
+}
+
+func NewImageOs(chrootEnv *chroot.ChrootEnv, template *config.ImageTemplate) (*ImageOs, error) {
+	if _, err := os.Stat(chrootEnv.ChrootImageBuildDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("chroot image build directory does not exist: %s", chrootEnv.ChrootImageBuildDir)
+	}
+	sysConfigName := template.GetSystemConfigName()
+	installRoot := filepath.Join(chrootEnv.ChrootImageBuildDir, sysConfigName)
+	if _, err := shell.ExecCmd("mkdir -p "+installRoot, true, "", nil); err != nil {
+		return nil, fmt.Errorf("failed to create directory %s: %w", installRoot, err)
+	}
+	return &ImageOs{
+		installRoot: installRoot,
+		chrootEnv:   chrootEnv,
+		template:    template,
+	}, nil
+}
+
+func (imageOs *ImageOs) GetInstallRoot() string {
+	return imageOs.installRoot
+}
+
+func (imageOs *ImageOs) InstallInitrd() (string, string, error) {
 	var versionInfo string
 	log := logger.Logger()
-	log.Infof("Installing initrd for image: %s", template.GetImageName())
+	log.Infof("Installing initrd for image: %s", imageOs.template.GetImageName())
 
-	installRoot, err := InitChrootInstallRoot(template)
-	if err != nil {
-		return installRoot, versionInfo, fmt.Errorf("failed to initialize chroot install root: %w", err)
-	}
-
-	pkgType := chroot.GetTargetOsPkgType()
+	pkgType := imageOs.chrootEnv.GetTargetOsPkgType()
 	if pkgType == "deb" {
-		if err := initRootfsForDeb(installRoot); err != nil {
-			return installRoot, versionInfo, fmt.Errorf("failed to initialize rootfs for deb: %w", err)
+		if err := imageOs.initRootfsForDeb(imageOs.installRoot); err != nil {
+			return imageOs.installRoot, versionInfo, fmt.Errorf("failed to initialize rootfs for deb: %w", err)
 		}
 	}
 
-	if err := mountSysfsToRootfs(installRoot); err != nil {
-		return installRoot, versionInfo, err
+	if err := imageOs.mountSysfsToRootfs(imageOs.installRoot); err != nil {
+		return imageOs.installRoot, versionInfo, err
 	}
 
 	log.Infof("Image installation pre-processing...")
-	err = preImageOsInstall(installRoot, template)
+	err := preImageOsInstall(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("pre-install failed: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image package installation...")
-	err = installImagePkgs(installRoot, template)
+	err = imageOs.installImagePkgs(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to install image packages: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image system configuration...")
-	err = updateInitrdConfig(installRoot, template)
+	err = updateInitrdConfig(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to update image config: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image installation post-processing...")
-	versionInfo, err = postImageOsInstall(installRoot, template)
+	versionInfo, err = imageOs.postImageOsInstall(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("post-install failed: %w", err)
 		goto fail
 	}
 
-	if err := umountSysfsFromRootfs(installRoot); err != nil {
-		return installRoot, versionInfo, err
+	if err := imageOs.umountSysfsFromRootfs(imageOs.installRoot); err != nil {
+		return imageOs.installRoot, versionInfo, err
 	}
 
-	return installRoot, versionInfo, nil
+	return imageOs.installRoot, versionInfo, nil
 
 fail:
-	if umountErr := umountSysfsFromRootfs(installRoot); umountErr != nil {
+	if umountErr := imageOs.umountSysfsFromRootfs(imageOs.installRoot); umountErr != nil {
 		log.Errorf("Failed to unmount sysfs from rootfs after error: %v", umountErr)
 	}
-	return installRoot, versionInfo, fmt.Errorf("initrd installation failed: %w", err)
+	return imageOs.installRoot, versionInfo, fmt.Errorf("initrd installation failed: %w", err)
 }
 
-func InstallImageOs(diskPathIdMap map[string]string, template *config.ImageTemplate) (string, error) {
+func (imageOs *ImageOs) InstallImageOs(diskPathIdMap map[string]string) (string, error) {
 	var err error
 	var versionInfo string
 	var mountPointInfoList []map[string]string
 	log := logger.Logger()
-	log.Infof("Installing OS for image: %s", template.GetImageName())
+	log.Infof("Installing OS for image: %s", imageOs.template.GetImageName())
 
-	installRoot, err := InitChrootInstallRoot(template)
-	if err != nil {
-		return versionInfo, fmt.Errorf("failed to initialize chroot install root: %w", err)
-	}
-
-	pkgType := chroot.GetTargetOsPkgType()
+	pkgType := imageOs.chrootEnv.GetTargetOsPkgType()
 	if pkgType == "deb" {
-		if err = mountDiskRootToChroot(installRoot, diskPathIdMap, template); err != nil {
+		if err = mountDiskRootToChroot(imageOs.installRoot, diskPathIdMap, imageOs.template); err != nil {
 			return versionInfo, fmt.Errorf("failed to mount disk root to chroot: %w", err)
 		}
 
-		if err = initRootfsForDeb(installRoot); err != nil {
+		if err = imageOs.initRootfsForDeb(imageOs.installRoot); err != nil {
 			err = fmt.Errorf("failed to initialize rootfs for deb: %w", err)
 			goto fail
 		}
 	}
 
-	mountPointInfoList, err = mountDiskToChroot(installRoot, diskPathIdMap, template)
+	mountPointInfoList, err = imageOs.mountDiskToChroot(imageOs.installRoot, diskPathIdMap, imageOs.template)
 	if err != nil {
 		return versionInfo, fmt.Errorf("failed to mount disk to chroot: %w", err)
 	}
 
 	log.Infof("Image installation pre-processing...")
-	err = preImageOsInstall(installRoot, template)
+	err = preImageOsInstall(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("pre-install failed: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image package installation...")
-	err = installImagePkgs(installRoot, template)
+	err = imageOs.installImagePkgs(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to install image packages: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image system configuration...")
-	err = updateImageConfig(installRoot, diskPathIdMap, template)
+	err = updateImageConfig(imageOs.installRoot, diskPathIdMap, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to update image config: %w", err)
 		goto fail
 	}
 
 	log.Infof("Installing bootloader...")
-	err = imageboot.InstallImageBoot(installRoot, diskPathIdMap, template)
+	err = imageboot.InstallImageBoot(imageOs.installRoot, diskPathIdMap, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to install image boot: %w", err)
 		goto fail
 	}
 
-	err = imagesecure.ConfigImageSecurity(installRoot, template)
+	err = imagesecure.ConfigImageSecurity(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to configure image security: %w", err)
 		goto fail
 	}
 
 	log.Infof("Configuring UKI...")
-	err = buildImageUKI(installRoot, template)
+	err = buildImageUKI(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to configure UKI: %w", err)
 		goto fail
 	}
 
-	err = imagesign.SignImage(installRoot, template)
+	err = imagesign.SignImage(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("failed to sign image: %w", err)
 		goto fail
 	}
 
 	log.Infof("Image installation post-processing...")
-	versionInfo, err = postImageOsInstall(installRoot, template)
+	versionInfo, err = imageOs.postImageOsInstall(imageOs.installRoot, imageOs.template)
 	if err != nil {
 		err = fmt.Errorf("post-install failed: %w", err)
 		goto fail
 	}
 
-	if err = umountDiskFromChroot(installRoot, mountPointInfoList); err != nil {
+	if err = imageOs.umountDiskFromChroot(imageOs.installRoot, mountPointInfoList); err != nil {
 		return versionInfo, fmt.Errorf("failed to unmount disk from chroot: %w", err)
 	}
 
 	return versionInfo, nil
 
 fail:
-	if umountErr := umountDiskFromChroot(installRoot, mountPointInfoList); umountErr != nil {
+	if umountErr := imageOs.umountDiskFromChroot(imageOs.installRoot, mountPointInfoList); umountErr != nil {
 		log.Errorf("Failed to unmount disk from chroot after error: %v", umountErr)
 	}
 	return versionInfo, fmt.Errorf("image OS installation failed: %w", err)
 }
 
-func InitChrootInstallRoot(template *config.ImageTemplate) (string, error) {
-	if _, err := os.Stat(chroot.ChrootImageBuildDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("chroot image build directory does not exist: %s", chroot.ChrootImageBuildDir)
-	}
-	sysConfigName := template.GetSystemConfigName()
-	installRoot := filepath.Join(chroot.ChrootImageBuildDir, sysConfigName)
-	if _, err := shell.ExecCmd("mkdir -p "+installRoot, true, "", nil); err != nil {
-		return installRoot, fmt.Errorf("failed to create directory %s: %w", installRoot, err)
-	}
-	return installRoot, nil
-}
-
-func initRootfsForDeb(installRoot string) error {
-	essentialPkgsList, err := chroot.GetChrootEnvEssentialPackageList()
+func (imageOs *ImageOs) initRootfsForDeb(installRoot string) error {
+	essentialPkgsList, err := imageOs.chrootEnv.GetChrootEnvEssentialPackageList()
 	if err != nil {
 		return fmt.Errorf("failed to get essential packages list: %v", err)
 	}
 	pkgListStr := strings.Join(essentialPkgsList, ",")
 	localRepoConfigChrootPath := "/etc/apt/sources.list.d/local.list"
-	localRepoConfigHostPath, err := chroot.GetChrootEnvHostPath(localRepoConfigChrootPath)
+	localRepoConfigHostPath, err := imageOs.chrootEnv.GetChrootEnvHostPath(localRepoConfigChrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment host path for %s: %w", localRepoConfigChrootPath, err)
 	}
@@ -207,7 +211,7 @@ func initRootfsForDeb(installRoot string) error {
 		return fmt.Errorf("local repository config file does not exist: %s", localRepoConfigHostPath)
 	}
 
-	chrootInstallRoot, err := chroot.GetChrootEnvPath(installRoot)
+	chrootInstallRoot, err := imageOs.chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path for install root %s: %w", installRoot, err)
 	}
@@ -222,30 +226,30 @@ func initRootfsForDeb(installRoot string) error {
 		"-- bookworm %s %s",
 		pkgListStr, chrootInstallRoot, localRepoConfigChrootPath)
 
-	if _, err = shell.ExecCmdWithStream(cmd, true, chroot.ChrootEnvRoot, nil); err != nil {
+	if _, err = shell.ExecCmdWithStream(cmd, true, imageOs.chrootEnv.ChrootEnvRoot, nil); err != nil {
 		return fmt.Errorf("failed to install packages into image: %w", err)
 	}
 	return nil
 }
 
-func mountSysfsToRootfs(installRoot string) error {
-	chrootInstallRoot, err := chroot.GetChrootEnvPath(installRoot)
+func (imageOs *ImageOs) mountSysfsToRootfs(installRoot string) error {
+	chrootInstallRoot, err := imageOs.chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path: %w", err)
 	}
-	err = chroot.MountChrootSysfs(chrootInstallRoot)
+	err = imageOs.chrootEnv.MountChrootSysfs(chrootInstallRoot)
 	if err != nil {
 		return fmt.Errorf("failed to mount sysfs into image rootfs %s: %w", chrootInstallRoot, err)
 	}
 	return nil
 }
 
-func umountSysfsFromRootfs(installRoot string) error {
-	chrootInstallRoot, err := chroot.GetChrootEnvPath(installRoot)
+func (imageOs *ImageOs) umountSysfsFromRootfs(installRoot string) error {
+	chrootInstallRoot, err := imageOs.chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path: %w", err)
 	}
-	if err := chroot.UmountChrootSysfs(chrootInstallRoot); err != nil {
+	if err := imageOs.chrootEnv.UmountChrootSysfs(chrootInstallRoot); err != nil {
 		return fmt.Errorf("failed to unmount sysfs for image rootfs: %w", err)
 	}
 	return nil
@@ -271,7 +275,7 @@ func mountDiskRootToChroot(installRoot string, diskPathIdMap map[string]string, 
 	return fmt.Errorf("no root partition found in diskPathIdMap")
 }
 
-func mountDiskToChroot(installRoot string, diskPathIdMap map[string]string, template *config.ImageTemplate) ([]map[string]string, error) {
+func (imageOs *ImageOs) mountDiskToChroot(installRoot string, diskPathIdMap map[string]string, template *config.ImageTemplate) ([]map[string]string, error) {
 	var mountPointInfoList []map[string]string
 	diskInfo := template.GetDiskConfig()
 	partions := diskInfo.Partitions
@@ -315,15 +319,15 @@ func mountDiskToChroot(installRoot string, diskPathIdMap map[string]string, temp
 		}
 	}
 
-	if err := mountSysfsToRootfs(installRoot); err != nil {
+	if err := imageOs.mountSysfsToRootfs(installRoot); err != nil {
 		return nil, err
 	}
 
 	return mountPointInfoList, nil
 }
 
-func umountDiskFromChroot(installRoot string, mountPointInfoList []map[string]string) error {
-	if err := umountSysfsFromRootfs(installRoot); err != nil {
+func (imageOs *ImageOs) umountDiskFromChroot(installRoot string, mountPointInfoList []map[string]string) error {
+	if err := imageOs.umountSysfsFromRootfs(installRoot); err != nil {
 		return err
 	}
 
@@ -371,7 +375,7 @@ func getDebPkgInstallList(template *config.ImageTemplate) []string {
 	return append(append(head, middle...), tail...)
 }
 
-func initImageRpmDb(installRoot string, template *config.ImageTemplate) error {
+func (imageOs *ImageOs) initImageRpmDb(installRoot string, template *config.ImageTemplate) error {
 	log := logger.Logger()
 	log.Infof("Initializing RPM database in %s", installRoot)
 	rpmDbPath := filepath.Join(installRoot, "var", "lib", "rpm")
@@ -380,28 +384,29 @@ func initImageRpmDb(installRoot string, template *config.ImageTemplate) error {
 			return fmt.Errorf("failed to create RPM database directory: %w", err)
 		}
 	}
-	chrootInstallRoot, err := chroot.GetChrootEnvPath(installRoot)
+	chrootInstallRoot, err := imageOs.chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path: %w", err)
 	}
 	cmd := fmt.Sprintf("rpm --root %s --initdb", chrootInstallRoot)
-	if _, err := shell.ExecCmd(cmd, true, chroot.ChrootEnvRoot, nil); err != nil {
+	if _, err := shell.ExecCmd(cmd, true, imageOs.chrootEnv.ChrootEnvRoot, nil); err != nil {
 		return fmt.Errorf("failed to initialize RPM database: %w", err)
 	}
 	return nil
 }
 
-func initDebLocalRepoWithinInstallRoot(installRoot string) error {
-	chrootInstallRoot, err := chroot.GetChrootEnvPath(installRoot)
+func (imageOs *ImageOs) initDebLocalRepoWithinInstallRoot(installRoot string) error {
+	chrootInstallRoot, err := imageOs.chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path for install root %s: %w", installRoot, err)
 	}
 
 	// from local.list
 	repoPath := filepath.Join(chrootInstallRoot, "/cdrom/cache-repo")
-	if err := chroot.MountChrootPath(chroot.ChrootPkgCacheDir, repoPath, "--bind"); err != nil {
+	chrootPkgCacheDir := imageOs.chrootEnv.GetChrootPkgCacheDir()
+	if err := imageOs.chrootEnv.MountChrootPath(chrootPkgCacheDir, repoPath, "--bind"); err != nil {
 		return fmt.Errorf("failed to mount package cache directory %s to chroot repo directory %s: %w",
-			chroot.ChrootPkgCacheDir, repoPath, err)
+			chrootPkgCacheDir, repoPath, err)
 	}
 
 	imageRepoCongfigPath := filepath.Join(installRoot, "/etc/apt/sources.list.d/", "*")
@@ -409,13 +414,13 @@ func initDebLocalRepoWithinInstallRoot(installRoot string) error {
 		return fmt.Errorf("failed to remove existing local repo config files: %w", err)
 	}
 
-	repoCongfigPath := filepath.Join(chroot.TargetOsConfigDir, "chrootenvconfigs", "local.list")
+	repoCongfigPath := filepath.Join(imageOs.chrootEnv.GetTargetOsConfigDir(), "chrootenvconfigs", "local.list")
 	if _, err := os.Stat(repoCongfigPath); os.IsNotExist(err) {
 		return fmt.Errorf("repo config file does not exist: %s", repoCongfigPath)
 	}
 
 	targetPath := filepath.Join(chrootInstallRoot, "/etc/apt/sources.list.d/")
-	if err := chroot.CopyFileFromHostToChroot(repoCongfigPath, targetPath); err != nil {
+	if err := imageOs.chrootEnv.CopyFileFromHostToChroot(repoCongfigPath, targetPath); err != nil {
 		return fmt.Errorf("failed to copy local repository config file to chroot: %w", err)
 	}
 
@@ -439,10 +444,10 @@ func initDebLocalRepoWithinInstallRoot(installRoot string) error {
 	return nil
 }
 
-func deInitDebLocalRepoWithinInstallRoot(installRoot string) error {
+func (imageOs *ImageOs) deInitDebLocalRepoWithinInstallRoot(installRoot string) error {
 	// from local.list
 	repoPath := filepath.Join(installRoot, "/cdrom/cache-repo")
-	if err := chroot.UmountChrootPath(repoPath); err != nil {
+	if err := imageOs.chrootEnv.UmountChrootPath(repoPath); err != nil {
 		return fmt.Errorf("failed to unmount chroot repo directory %s: %w", repoPath, err)
 	}
 
@@ -466,11 +471,11 @@ func preImageOsInstall(installRoot string, template *config.ImageTemplate) error
 	return nil
 }
 
-func installImagePkgs(installRoot string, template *config.ImageTemplate) error {
+func (imageOs *ImageOs) installImagePkgs(installRoot string, template *config.ImageTemplate) error {
 	log := logger.Logger()
-	pkgType := chroot.GetTargetOsPkgType()
+	pkgType := imageOs.chrootEnv.GetTargetOsPkgType()
 	if pkgType == "rpm" {
-		err := initImageRpmDb(installRoot, template)
+		err := imageOs.initImageRpmDb(installRoot, template)
 		if err != nil {
 			return fmt.Errorf("failed to initialize RPM database: %w", err)
 		}
@@ -480,14 +485,14 @@ func installImagePkgs(installRoot string, template *config.ImageTemplate) error 
 		var repositoryIDList []string = []string{"cache-repo"}
 		for i, pkg := range imagePkgOrderedList {
 			log.Infof("Installing package %d/%d: %s", i+1, imagePkgNum, pkg)
-			if err := chroot.TdnfInstallPackage(pkg, installRoot, repositoryIDList); err != nil {
+			if err := imageOs.chrootEnv.TdnfInstallPackage(pkg, installRoot, repositoryIDList); err != nil {
 				return fmt.Errorf("failed to install package %s: %w", pkg, err)
 			}
 		}
 	} else if pkgType == "deb" {
 		imagePkgOrderedList := getDebPkgInstallList(template)
 		// Prepare local cache repository
-		if err := initDebLocalRepoWithinInstallRoot(installRoot); err != nil {
+		if err := imageOs.initDebLocalRepoWithinInstallRoot(installRoot); err != nil {
 			return fmt.Errorf("failed to initialize local repository within install root: %w", err)
 		}
 		imagePkgNum := len(imagePkgOrderedList)
@@ -514,12 +519,12 @@ func installImagePkgs(installRoot string, template *config.ImageTemplate) error 
 					}
 				}
 			} else {
-				if err := chroot.AptInstallPackage(pkg, installRoot, repoSrcList); err != nil {
+				if err := imageOs.chrootEnv.AptInstallPackage(pkg, installRoot, repoSrcList); err != nil {
 					return fmt.Errorf("failed to install package %s: %w", pkg, err)
 				}
 			}
 		}
-		if err := deInitDebLocalRepoWithinInstallRoot(installRoot); err != nil {
+		if err := imageOs.deInitDebLocalRepoWithinInstallRoot(installRoot); err != nil {
 			return fmt.Errorf("failed to de-initialize local repository within install root: %w", err)
 		}
 	} else {
@@ -569,7 +574,7 @@ func updateImageConfig(installRoot string, diskPathIdMap map[string]string, temp
 	return nil
 }
 
-func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (string, error) {
+func (imageOs *ImageOs) getImageVersionInfo(installRoot string, template *config.ImageTemplate) (string, error) {
 	var versionInfo string
 	log := logger.Logger()
 	log.Infof("Getting image version info for: %s", template.GetImageName())
@@ -598,7 +603,7 @@ func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (st
 			log.Debugf("Version info not found in %s", imageVersionFilePath)
 		}
 	default:
-		versionInfo = chroot.GetTargetOsReleaseVersion()
+		versionInfo = imageOs.chrootEnv.GetTargetOsReleaseVersion()
 	}
 
 	log.Infof("Extracted version info: %s", versionInfo)
@@ -606,8 +611,8 @@ func getImageVersionInfo(installRoot string, template *config.ImageTemplate) (st
 	return versionInfo, nil
 }
 
-func postImageOsInstall(installRoot string, template *config.ImageTemplate) (string, error) {
-	versionInfo, err := getImageVersionInfo(installRoot, template)
+func (imageOs *ImageOs) postImageOsInstall(installRoot string, template *config.ImageTemplate) (string, error) {
+	versionInfo, err := imageOs.getImageVersionInfo(installRoot, template)
 	if err != nil {
 		return versionInfo, fmt.Errorf("failed to get image version info: %w", err)
 	}

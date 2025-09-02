@@ -12,6 +12,7 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/provider"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
 	"github.com/open-edge-platform/image-composer/internal/utils/shell"
+	"github.com/open-edge-platform/image-composer/internal/utils/system"
 )
 
 // DEB: https://deb.debian.org/debian/dists/bookworm/main/binary-amd64/Packages.gz
@@ -25,13 +26,34 @@ const (
 
 // eLxr implements provider.Provider
 type eLxr struct {
-	repoURL string
-	repoCfg debutils.RepoConfig
-	gzHref  string
+	repoURL   string
+	repoCfg   debutils.RepoConfig
+	gzHref    string
+	chrootEnv *chroot.ChrootEnv
+	rawMaker  *rawmaker.RawMaker
+	isoMaker  *isomaker.IsoMaker
 }
 
-func Register(dist, arch string) {
-	provider.Register(&eLxr{}, dist, arch)
+func Register(targetOs, targetDist, targetArch string) error {
+	chrootEnv, err := chroot.NewChrootEnv(targetOs, targetDist, targetArch)
+	if err != nil {
+		return fmt.Errorf("failed to inject chroot dependency: %w", err)
+	}
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	if err != nil {
+		return fmt.Errorf("failed to inject raw image maker dependency: %w", err)
+	}
+	isoMaker, err := isomaker.NewIsoMaker(chrootEnv)
+	if err != nil {
+		return fmt.Errorf("failed to inject ISO image maker dependency: %w", err)
+	}
+	provider.Register(&eLxr{
+		chrootEnv: chrootEnv,
+		rawMaker:  rawMaker,
+		isoMaker:  isoMaker,
+	}, targetDist, targetArch)
+
+	return nil
 }
 
 // Name returns the unique name of the provider
@@ -45,11 +67,11 @@ func (p *eLxr) Init(dist, arch string) error {
 
 	//todo: need to correct of how to get the arch once finalized
 	if arch == "x86_64" {
-		arch = "binary-amd64"
+		arch = "amd64"
 	}
-	p.repoURL = baseURL + arch + "/" + configName
+	p.repoURL = baseURL + "binary-" + arch + "/" + configName
 
-	cfg, err := loadRepoConfig(p.repoURL)
+	cfg, err := loadRepoConfig(p.repoURL, arch)
 	if err != nil {
 		log.Errorf("parsing repo config failed: %v", err)
 		return err
@@ -73,7 +95,7 @@ func (p *eLxr) PreProcess(template *config.ImageTemplate) error {
 		return fmt.Errorf("failed to download image packages: %v", err)
 	}
 
-	if err := chroot.InitChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
+	if err := p.chrootEnv.InitChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
 		return fmt.Errorf("failed to initialize chroot environment: %v", err)
 	}
 	return nil
@@ -81,12 +103,12 @@ func (p *eLxr) PreProcess(template *config.ImageTemplate) error {
 
 func (p *eLxr) BuildImage(template *config.ImageTemplate) error {
 	if config.TargetImageType == "iso" {
-		err := isomaker.BuildISOImage(template)
+		err := p.isoMaker.BuildIsoImage(template)
 		if err != nil {
 			return fmt.Errorf("failed to build ISO image: %v", err)
 		}
 	} else {
-		err := rawmaker.BuildRawImage(template)
+		err := p.rawMaker.BuildRawImage(template)
 		if err != nil {
 			return fmt.Errorf("failed to build raw image: %v", err)
 		}
@@ -95,12 +117,7 @@ func (p *eLxr) BuildImage(template *config.ImageTemplate) error {
 }
 
 func (p *eLxr) PostProcess(template *config.ImageTemplate, err error) error {
-	log := logger.Logger()
-	if err != nil {
-		log.Errorf("post-process error: %v", err)
-	}
-
-	if err := chroot.CleanupChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
+	if err := p.chrootEnv.CleanupChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
 		return fmt.Errorf("failed to cleanup chroot environment: %v", err)
 	}
 	return nil
@@ -117,7 +134,7 @@ func (p *eLxr) installHostDependency() error {
 		"veritysetup":       "cryptsetup",    // For the veritysetup command
 		"sbsign":            "sbsigntool",    // For the UKI image creation
 	}
-	hostPkgManager, err := chroot.GetHostOsPkgManager()
+	hostPkgManager, err := system.GetHostOsPkgManager()
 	if err != nil {
 		return fmt.Errorf("failed to get host package manager: %w", err)
 	}
@@ -151,6 +168,8 @@ func (p *eLxr) downloadImagePkgs(template *config.ImageTemplate) error {
 	pkgCacheDir := filepath.Join(globalCache, "pkgCache", providerId)
 	debutils.RepoCfg = p.repoCfg
 	debutils.GzHref = p.gzHref
+	debutils.Architecture = p.repoCfg.Arch
+	debutils.UserRepo = template.GetPackageRepositories()
 	config.FullPkgList, err = debutils.DownloadPackages(pkgList, pkgCacheDir, "")
 	return err
 }
@@ -159,7 +178,7 @@ func GetProviderId(dist, arch string) string {
 	return "wind-river-elxr" + "-" + dist + "-" + arch
 }
 
-func loadRepoConfig(repoUrl string) (debutils.RepoConfig, error) {
+func loadRepoConfig(repoUrl string, arch string) (debutils.RepoConfig, error) {
 	log := logger.Logger()
 
 	var rc debutils.RepoConfig
@@ -176,6 +195,7 @@ func loadRepoConfig(repoUrl string) (debutils.RepoConfig, error) {
 	rc.ReleaseSign = "https://mirror.elxr.dev/elxr/dists/aria/Release.gpg"
 	rc.Section = "main"
 	rc.BuildPath = "./builds/elxr12"
+	rc.Arch = arch
 
 	log.Infof("repo config: %+v", rc)
 
