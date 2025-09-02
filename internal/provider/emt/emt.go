@@ -17,6 +17,7 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/provider"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
 	"github.com/open-edge-platform/image-composer/internal/utils/shell"
+	"github.com/open-edge-platform/image-composer/internal/utils/system"
 )
 
 const (
@@ -27,13 +28,34 @@ const (
 
 // Emt implements provider.Provider
 type Emt struct {
-	repoURL string
-	repoCfg rpmutils.RepoConfig
-	zstHref string
+	repoURL   string
+	repoCfg   rpmutils.RepoConfig
+	zstHref   string
+	chrootEnv *chroot.ChrootEnv
+	rawMaker  *rawmaker.RawMaker
+	isoMaker  *isomaker.IsoMaker
 }
 
-func Register(dist, arch string) {
-	provider.Register(&Emt{}, dist, arch)
+func Register(targetOs, targetDist, targetArch string) error {
+	chrootEnv, err := chroot.NewChrootEnv(targetOs, targetDist, targetArch)
+	if err != nil {
+		return fmt.Errorf("failed to inject chroot dependency: %w", err)
+	}
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	if err != nil {
+		return fmt.Errorf("failed to inject raw image maker dependency: %w", err)
+	}
+	isoMaker, err := isomaker.NewIsoMaker(chrootEnv)
+	if err != nil {
+		return fmt.Errorf("failed to inject ISO image maker dependency: %w", err)
+	}
+	provider.Register(&Emt{
+		chrootEnv: chrootEnv,
+		rawMaker:  rawMaker,
+		isoMaker:  isoMaker,
+	}, targetDist, targetArch)
+
+	return nil
 }
 
 // Name returns the unique name of the provider
@@ -84,7 +106,7 @@ func (p *Emt) PreProcess(template *config.ImageTemplate) error {
 		return fmt.Errorf("failed to download image packages: %v", err)
 	}
 
-	if err := chroot.InitChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
+	if err := p.chrootEnv.InitChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
 		return fmt.Errorf("failed to initialize chroot environment: %v", err)
 	}
 	return nil
@@ -92,12 +114,12 @@ func (p *Emt) PreProcess(template *config.ImageTemplate) error {
 
 func (p *Emt) BuildImage(template *config.ImageTemplate) error {
 	if config.TargetImageType == "iso" {
-		err := isomaker.BuildISOImage(template)
+		err := p.isoMaker.BuildIsoImage(template)
 		if err != nil {
 			return fmt.Errorf("failed to build ISO image: %v", err)
 		}
 	} else {
-		err := rawmaker.BuildRawImage(template)
+		err := p.rawMaker.BuildRawImage(template)
 		if err != nil {
 			return fmt.Errorf("failed to build raw image: %v", err)
 		}
@@ -106,12 +128,7 @@ func (p *Emt) BuildImage(template *config.ImageTemplate) error {
 }
 
 func (p *Emt) PostProcess(template *config.ImageTemplate, err error) error {
-	log := logger.Logger()
-	if err != nil {
-		log.Errorf("post-process error: %v", err)
-	}
-
-	if err := chroot.CleanupChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
+	if err := p.chrootEnv.CleanupChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
 		return fmt.Errorf("failed to cleanup chroot environment: %v", err)
 	}
 	return err
@@ -125,7 +142,7 @@ func (p *Emt) installHostDependency() error {
 		"xorriso":  "xorriso",    // For ISO image creation
 		"sbsign":   "sbsigntool", // For the UKI image creation
 	}
-	hostPkgManager, err := chroot.GetHostOsPkgManager()
+	hostPkgManager, err := system.GetHostOsPkgManager()
 	if err != nil {
 		return fmt.Errorf("failed to get host package manager: %w", err)
 	}

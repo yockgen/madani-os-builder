@@ -113,18 +113,23 @@ post:
 }
 
 func InitProvider(os, dist, arch string) (provider.Provider, error) {
-
 	var p provider.Provider
 	switch os {
 	case "azure-linux":
-		azl.Register(dist, arch)
 		config.ProviderId = azl.GetProviderId(dist, arch)
+		if err := azl.Register(os, dist, arch); err != nil {
+			return nil, fmt.Errorf("registering azl provider failed: %v", err)
+		}
 	case "edge-microvisor-toolkit":
-		emt.Register(dist, arch)
 		config.ProviderId = emt.GetProviderId(dist, arch)
+		if err := emt.Register(os, dist, arch); err != nil {
+			return nil, fmt.Errorf("registering emt provider failed: %v", err)
+		}
 	case "wind-river-elxr":
-		elxr.Register(dist, arch)
 		config.ProviderId = elxr.GetProviderId(dist, arch)
+		if err := elxr.Register(os, dist, arch); err != nil {
+			return nil, fmt.Errorf("registering elxr provider failed: %v", err)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", os)
 	}

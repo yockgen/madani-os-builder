@@ -12,34 +12,101 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
 	"github.com/open-edge-platform/image-composer/internal/utils/mount"
 	"github.com/open-edge-platform/image-composer/internal/utils/shell"
+	"github.com/open-edge-platform/image-composer/internal/utils/system"
 )
 
-var (
+const (
+	ChrootRepoDir       = "/cdrom/cache-repo"
+	RPMRepoConfigDir    = "/etc/yum.repos.d/"
+	DEBRepoConfigDir    = "/etc/apt/sources.list.d/"
+	ResolvConfPath      = "/etc/resolv.conf"
+	DefaultArchitecture = "amd64"
+)
+
+type ChrootEnv struct {
 	ChrootEnvRoot       string
 	ChrootImageBuildDir string
-)
-
-func GetChrootEnvHostPath(chrootPath string) (string, error) {
-	if ChrootEnvRoot == "" {
-		return "", fmt.Errorf("chroot env may not initialized")
-	}
-	return filepath.Join(ChrootEnvRoot, chrootPath), nil
+	chrootBuilder       *ChrootBuilder
 }
 
-func GetChrootEnvPath(ChrootEnvHostPath string) (string, error) {
-	if ChrootEnvRoot == "" {
-		return "", fmt.Errorf("chroot env may not initialized")
-	}
-	isSubPath, err := file.IsSubPath(ChrootEnvRoot, ChrootEnvHostPath)
+func NewChrootEnv(targetOs, targetDist, targetArch string) (*ChrootEnv, error) {
+	globalWorkDir, err := config.WorkDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to check if path %s is a subpath of chroot env root %s: %w",
-			ChrootEnvHostPath, ChrootEnvRoot, err)
+		return nil, fmt.Errorf("failed to get global work directory: %v", err)
 	}
-	if !isSubPath {
-		return "", fmt.Errorf("path %s is not a subpath of chroot env root %s", ChrootEnvHostPath, ChrootEnvRoot)
+	chrootEnvRoot := filepath.Join(globalWorkDir, config.ProviderId, "chrootenv")
+	if _, err := os.Stat(chrootEnvRoot); os.IsNotExist(err) {
+		if err = os.MkdirAll(chrootEnvRoot, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create chroot environment root directory: %w", err)
+		}
 	}
 
-	chrootPath := ChrootEnvHostPath[len(ChrootEnvRoot):]
+	chrootBuilder, err := NewChrootBuilder(targetOs, targetDist, targetArch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chroot builder: %w", err)
+	}
+
+	return &ChrootEnv{
+		ChrootEnvRoot: chrootEnvRoot,
+		chrootBuilder: chrootBuilder,
+	}, nil
+}
+
+func (chrootEnv *ChrootEnv) GetTargetOsPkgType() string {
+	return chrootEnv.chrootBuilder.getTargetOsPkgType()
+}
+
+func (chrootEnv *ChrootEnv) GetTargetOsConfigDir() string {
+	return chrootEnv.chrootBuilder.targetOsConfigDir
+}
+
+func (chrootEnv *ChrootEnv) GetTargetOsReleaseVersion() string {
+	releaseVersion, ok := chrootEnv.chrootBuilder.targetOsConfig["releaseVersion"]
+	if !ok {
+		return "unknown"
+	}
+	if s, ok := releaseVersion.(string); ok {
+		return s
+	}
+	return "unknown"
+}
+
+func (chrootEnv *ChrootEnv) GetChrootPkgCacheDir() string {
+	return chrootEnv.chrootBuilder.chrootPkgCacheDir
+}
+
+func (chrootEnv *ChrootEnv) GetChrootEnvEssentialPackageList() ([]string, error) {
+	return chrootEnv.chrootBuilder.getChrootEnvEssentialPackageList()
+}
+
+func (chrootEnv *ChrootEnv) GetChrootEnvHostPath(chrootPath string) (string, error) {
+	if strings.Contains(chrootPath, "..") {
+		return "", fmt.Errorf("path contains invalid characters: %s", chrootPath)
+	}
+
+	if chrootEnv.ChrootEnvRoot == "" {
+		log.Errorf("Chroot env is not initialized")
+		return "", fmt.Errorf("chroot env is not initialized")
+	}
+	return filepath.Join(chrootEnv.ChrootEnvRoot, chrootPath), nil
+}
+
+func (chrootEnv *ChrootEnv) GetChrootEnvPath(ChrootEnvHostPath string) (string, error) {
+	if chrootEnv.ChrootEnvRoot == "" {
+		log.Errorf("Chroot env is not initialized")
+		return "", fmt.Errorf("chroot env is not initialized")
+	}
+	isSubPath, err := file.IsSubPath(chrootEnv.ChrootEnvRoot, ChrootEnvHostPath)
+	if err != nil {
+		log.Errorf("Failed to check if path %s is a subpath of chroot env root %s: %v", ChrootEnvHostPath, chrootEnv.ChrootEnvRoot, err)
+		return "", fmt.Errorf("failed to check if path %s is a subpath of chroot env root %s: %w",
+			ChrootEnvHostPath, chrootEnv.ChrootEnvRoot, err)
+	}
+	if !isSubPath {
+		return "", fmt.Errorf("path %s is not a subpath of chroot env root %s", ChrootEnvHostPath, chrootEnv.ChrootEnvRoot)
+	}
+
+	chrootPath := ChrootEnvHostPath[len(chrootEnv.ChrootEnvRoot):]
 	if strings.HasPrefix(chrootPath, "/") {
 		return chrootPath, nil
 	} else {
@@ -47,21 +114,21 @@ func GetChrootEnvPath(ChrootEnvHostPath string) (string, error) {
 	}
 }
 
-func MountChrootSysfs(chrootPath string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) MountChrootSysfs(chrootPath string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
 	return mount.MountSysfs(chrootHostPath)
 }
 
-func UmountChrootSysfs(chrootPath string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) UmountChrootSysfs(chrootPath string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
 
-	if err := StopGPGComponents(chrootHostPath); err != nil {
+	if err := system.StopGPGComponents(chrootHostPath); err != nil {
 		return fmt.Errorf("failed to stop GPG components in chroot environment: %w", err)
 	}
 
@@ -72,8 +139,8 @@ func UmountChrootSysfs(chrootPath string) error {
 }
 
 // MountChrootPath mounts a host path to a chroot path
-func MountChrootPath(hostFullPath, chrootPath, mountFlags string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) MountChrootPath(hostFullPath, chrootPath, mountFlags string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
@@ -86,8 +153,8 @@ func MountChrootPath(hostFullPath, chrootPath, mountFlags string) error {
 }
 
 // UmountChrootPath unmounts a chroot path
-func UmountChrootPath(chrootPath string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) UmountChrootPath(chrootPath string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
@@ -96,8 +163,8 @@ func UmountChrootPath(chrootPath string) error {
 }
 
 // CopyFileFromHostToChroot copies a file from the host to the chroot environment
-func CopyFileFromHostToChroot(hostFilePath, chrootPath string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) CopyFileFromHostToChroot(hostFilePath, chrootPath string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
@@ -105,16 +172,16 @@ func CopyFileFromHostToChroot(hostFilePath, chrootPath string) error {
 }
 
 // CopyFileFromChrootToHost copies a file from the chroot environment to the host
-func CopyFileFromChrootToHost(hostFilePath, chrootPath string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootPath)
+func (chrootEnv *ChrootEnv) CopyFileFromChrootToHost(hostFilePath, chrootPath string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootPath)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootPath, err)
 	}
 	return file.CopyFile(chrootHostPath, hostFilePath, "-f", true)
 }
 
-func updateChrootLocalRPMRepo(chrootRepoDir string) error {
-	chrootHostPath, err := GetChrootEnvHostPath(chrootRepoDir)
+func (chrootEnv *ChrootEnv) updateChrootLocalRPMRepo(chrootRepoDir string) error {
+	chrootHostPath, err := chrootEnv.GetChrootEnvHostPath(chrootRepoDir)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot host path for %s: %w", chrootRepoDir, err)
 	}
@@ -122,55 +189,36 @@ func updateChrootLocalRPMRepo(chrootRepoDir string) error {
 		return fmt.Errorf("chroot repo directory not existing%s: %w", chrootHostPath, err)
 	}
 	cmd := fmt.Sprintf("createrepo_c --compatibility --update %s", chrootRepoDir)
-	if _, err = shell.ExecCmd(cmd, false, ChrootEnvRoot, nil); err != nil {
+	if _, err = shell.ExecCmd(cmd, false, chrootEnv.ChrootEnvRoot, nil); err != nil {
 		return fmt.Errorf("failed to update chroot local cache repository: %w", err)
 	}
 	return nil
 }
 
-func UpdateLocalDebRepo(repoPath string) error {
-	metaDataPath := filepath.Join(repoPath, "dists/stable/main/binary-amd64", "Packages.gz")
-	if _, err := os.Stat(metaDataPath); err == nil {
-		if _, err = shell.ExecCmd("rm -f "+metaDataPath, false, "", nil); err != nil {
-			return fmt.Errorf("failed to remove existing Packages.gz: %w", err)
-		}
-	}
-	metaDataDir := filepath.Dir(metaDataPath)
-	if _, err := os.Stat(metaDataDir); os.IsNotExist(err) {
-		if _, err = shell.ExecCmd("mkdir -p "+metaDataDir, false, "", nil); err != nil {
-			return fmt.Errorf("failed to create metadata directory %s: %w", metaDataDir, err)
-		}
-	}
-
-	cmd := fmt.Sprintf("cd %s && sudo dpkg-scanpackages . /dev/null | gzip -9c > %s", repoPath, metaDataPath)
-	if _, err := shell.ExecCmd(cmd, false, "", nil); err != nil {
-		return fmt.Errorf("failed to create local debian cache repository: %w", err)
-	}
-
-	return nil
+func (chrootEnv *ChrootEnv) updateChrootLocalDebRepo(chrootPkgCacheDir string) error {
+	return chrootEnv.chrootBuilder.debInstaller.UpdateLocalDebRepo(chrootPkgCacheDir, config.TargetArch)
 }
 
-func RefreshLocalCacheRepo() error {
+func (chrootEnv *ChrootEnv) RefreshLocalCacheRepo() error {
 	// From local.repo
-	chrootRepoDir := "/cdrom/cache-repo"
-	pkgType := GetTargetOsPkgType()
+	pkgType := chrootEnv.GetTargetOsPkgType()
 	if pkgType == "rpm" {
-		releaseVersion := GetTargetOsReleaseVersion()
-		if err := updateChrootLocalRPMRepo(chrootRepoDir); err != nil {
-			return fmt.Errorf("failed to update rpm local cache repository %s: %w", chrootRepoDir, err)
+		releaseVersion := chrootEnv.GetTargetOsReleaseVersion()
+		if err := chrootEnv.updateChrootLocalRPMRepo(ChrootRepoDir); err != nil {
+			return fmt.Errorf("failed to update rpm local cache repository %s: %w", ChrootRepoDir, err)
 		}
 
 		cmd := fmt.Sprintf("tdnf makecache --releasever %s", releaseVersion)
-		if _, err := shell.ExecCmdWithStream(cmd, true, ChrootEnvRoot, nil); err != nil {
+		if _, err := shell.ExecCmdWithStream(cmd, true, chrootEnv.ChrootEnvRoot, nil); err != nil {
 			return fmt.Errorf("failed to refresh cache for chroot repository: %w", err)
 		}
 	} else if pkgType == "deb" {
-		if err := UpdateLocalDebRepo(ChrootPkgCacheDir); err != nil {
+		if err := chrootEnv.updateChrootLocalDebRepo(chrootEnv.chrootBuilder.chrootPkgCacheDir); err != nil {
 			return fmt.Errorf("failed to update debian local cache repository: %v", err)
 		}
 
 		cmd := "apt-get update"
-		if _, err := shell.ExecCmdWithStream(cmd, true, ChrootEnvRoot, nil); err != nil {
+		if _, err := shell.ExecCmdWithStream(cmd, true, chrootEnv.ChrootEnvRoot, nil); err != nil {
 			return fmt.Errorf("failed to refresh cache for chroot repository: %w", err)
 		}
 	} else {
@@ -179,47 +227,44 @@ func RefreshLocalCacheRepo() error {
 	return nil
 }
 
-func initChrootLocalRepo() error {
-	// From local.repo
-	chrootRepoDir := "/cdrom/cache-repo"
-
-	if err := MountChrootPath(ChrootPkgCacheDir, chrootRepoDir, "--bind"); err != nil {
+func (chrootEnv *ChrootEnv) initChrootLocalRepo() error {
+	if err := chrootEnv.MountChrootPath(chrootEnv.chrootBuilder.chrootPkgCacheDir, ChrootRepoDir, "--bind"); err != nil {
 		return fmt.Errorf("failed to mount package cache directory %s to chroot repo directory %s: %w",
-			ChrootPkgCacheDir, chrootRepoDir, err)
+			chrootEnv.chrootBuilder.chrootPkgCacheDir, ChrootRepoDir, err)
 	}
 
-	if err := RefreshLocalCacheRepo(); err != nil {
+	if err := chrootEnv.RefreshLocalCacheRepo(); err != nil {
 		return fmt.Errorf("failed to refresh local cache repository: %w", err)
 	}
 	return nil
 }
 
-func createChrootRepo(targetOs, targetDist string) error {
-	pkgType := GetTargetOsPkgType()
+func (chrootEnv *ChrootEnv) createChrootRepo(targetOs, targetDist string) error {
+	pkgType := chrootEnv.GetTargetOsPkgType()
 	if pkgType == "rpm" {
-		chrootRepoCongfigPath := filepath.Join(TargetOsConfigDir, "chrootenvconfigs", "local.repo")
+		chrootRepoCongfigPath := filepath.Join(chrootEnv.chrootBuilder.targetOsConfigDir, "chrootenvconfigs", "local.repo")
 		if _, err := os.Stat(chrootRepoCongfigPath); os.IsNotExist(err) {
 			return fmt.Errorf("chroot repo config file does not exist: %s", chrootRepoCongfigPath)
 		}
 
-		if err := CopyFileFromHostToChroot(chrootRepoCongfigPath, "/etc/yum.repos.d/"); err != nil {
+		if err := chrootEnv.CopyFileFromHostToChroot(chrootRepoCongfigPath, RPMRepoConfigDir); err != nil {
 			return fmt.Errorf("failed to copy local.repo: %w", err)
 		}
 	} else if pkgType == "deb" {
-		chrootRepoCongfigPath, err := GetChrootEnvHostPath("/etc/apt/sources.list.d/*")
+		chrootRepoCongfigPath, err := chrootEnv.GetChrootEnvHostPath(DEBRepoConfigDir)
 		if err != nil {
 			return fmt.Errorf("failed to get chroot host path for local repo config: %w", err)
 		}
-		if _, err := shell.ExecCmd("rm -f "+chrootRepoCongfigPath, true, "", nil); err != nil {
+		if _, err := shell.ExecCmd("rm -f "+chrootRepoCongfigPath+"/*", true, "", nil); err != nil {
 			return fmt.Errorf("failed to remove existing local repo config files: %w", err)
 		}
 
-		RepoCongfigPath := filepath.Join(TargetOsConfigDir, "chrootenvconfigs", "local.list")
+		RepoCongfigPath := filepath.Join(chrootEnv.chrootBuilder.targetOsConfigDir, "chrootenvconfigs", "local.list")
 		if _, err := os.Stat(RepoCongfigPath); os.IsNotExist(err) {
 			return fmt.Errorf("chroot repo config file does not exist: %s", RepoCongfigPath)
 		}
 
-		if err := CopyFileFromHostToChroot(RepoCongfigPath, "/etc/apt/sources.list.d/"); err != nil {
+		if err := chrootEnv.CopyFileFromHostToChroot(RepoCongfigPath, DEBRepoConfigDir); err != nil {
 			return fmt.Errorf("failed to copy local.repo: %w", err)
 		}
 	} else {
@@ -229,145 +274,100 @@ func createChrootRepo(targetOs, targetDist string) error {
 	return nil
 }
 
-func initChrootWorkspace() error {
-	chrootWorkspace := filepath.Join(ChrootEnvRoot, "workspace")
-	ChrootImageBuildDir = filepath.Join(chrootWorkspace, "imagebuild")
-	if _, err := os.Stat(ChrootImageBuildDir); os.IsNotExist(err) {
-		if _, err = shell.ExecCmd("mkdir -p "+ChrootImageBuildDir, true, "", nil); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", ChrootImageBuildDir, err)
+func (chrootEnv *ChrootEnv) initChrootWorkspace() error {
+	chrootWorkspace := filepath.Join(chrootEnv.ChrootEnvRoot, "workspace")
+	chrootEnv.ChrootImageBuildDir = filepath.Join(chrootWorkspace, "imagebuild")
+	if _, err := os.Stat(chrootEnv.ChrootImageBuildDir); os.IsNotExist(err) {
+		if _, err = shell.ExecCmd("mkdir -p "+chrootEnv.ChrootImageBuildDir, true, "", nil); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", chrootEnv.ChrootImageBuildDir, err)
 		}
 	}
 	return nil
 }
 
-func InitChrootEnv(targetOs, targetDist, targetArch string) error {
-	var chrootEnvTarPath string
-
-	// Init ChrootEnvRoot path
-	globalWorkDir, err := config.WorkDir()
-	if err != nil {
-		return fmt.Errorf("failed to get global work directory: %v", err)
-	}
-	ChrootEnvRoot = filepath.Join(globalWorkDir, config.ProviderId, "chrootenv")
-	if _, err := os.Stat(ChrootEnvRoot); os.IsNotExist(err) {
-		if err = os.MkdirAll(ChrootEnvRoot, 0755); err != nil {
-			return fmt.Errorf("failed to create chroot environment root directory: %w", err)
-		}
-	}
-	// Init ChrootEnvRoot rootfs
-	if err := InitChrootBuildSpace(targetOs, targetDist, targetArch); err != nil {
-		return fmt.Errorf("failed to initialize chroot build space: %v", err)
-	}
-
+func (chrootEnv *ChrootEnv) InitChrootEnv(targetOs, targetDist, targetArch string) (err error) {
 	var chrootRootfsExist bool = true
-	if files, _ := os.ReadDir(ChrootEnvRoot); len(files) == 0 {
+
+	if files, _ := os.ReadDir(chrootEnv.ChrootEnvRoot); len(files) == 0 {
 		chrootRootfsExist = false
 
-		chrootEnvTarPath = filepath.Join(ChrootBuildDir, "chrootenv.tar.gz")
+		chrootEnvTarPath := filepath.Join(chrootEnv.chrootBuilder.chrootBuildDir, "chrootenv.tar.gz")
 		if _, err := os.Stat(chrootEnvTarPath); os.IsNotExist(err) {
 			// Build chroot environment tarball
-			if err = BuildChrootEnv(targetOs, targetDist, targetArch); err != nil {
+			if err = chrootEnv.chrootBuilder.BuildChrootEnv(targetOs, targetDist, targetArch); err != nil {
 				return fmt.Errorf("failed to build chroot environment: %w", err)
 			}
 		}
 
 		// Extract chroot environment tarball
-		if err = compression.DecompressFile(chrootEnvTarPath, ChrootEnvRoot, "tar.gz", true); err != nil {
+		if err = compression.DecompressFile(chrootEnvTarPath, chrootEnv.ChrootEnvRoot, "tar.gz", true); err != nil {
 			return fmt.Errorf("failed to extract chroot environment tarball: %w", err)
 		}
 
 		// Copy resolv.conf to the chroot environment
-		if err = CopyFileFromHostToChroot("/etc/resolv.conf", "/etc/"); err != nil {
+		if err = chrootEnv.CopyFileFromHostToChroot(ResolvConfPath, "/etc/"); err != nil {
 			return fmt.Errorf("failed to copy resolv.conf: %w", err)
 		}
 	}
 
 	// Initialize the chroot workspace
-	if err = initChrootWorkspace(); err != nil {
+	if err = chrootEnv.initChrootWorkspace(); err != nil {
 		return fmt.Errorf("failed to initialize chroot workspace: %w", err)
 	}
 
 	// Mount sysfs to the chroot environment
-	err = MountChrootSysfs("/")
+	err = chrootEnv.MountChrootSysfs("/")
 	if err != nil {
 		return fmt.Errorf("failed to mount sysfs for chroot environment: %w", err)
 	}
 
+	defer func() {
+		if err != nil {
+			if umountErr := chrootEnv.UmountChrootSysfs("/"); umountErr != nil {
+				log.Errorf("Failed to unmount sysfs for chroot environment: %v", umountErr)
+				err = fmt.Errorf("operation failed: %w, cleanup errors: %v", err, umountErr)
+			}
+		}
+	}()
+
 	if !chrootRootfsExist {
 		// Create chroot repository
-		if err = createChrootRepo(targetOs, targetDist); err != nil {
-			err = fmt.Errorf("failed to create chroot repository: %w", err)
-			goto fail
+		if err = chrootEnv.createChrootRepo(targetOs, targetDist); err != nil {
+			return fmt.Errorf("failed to create chroot repository: %w", err)
 		}
 	}
 
-	if err = initChrootLocalRepo(); err != nil {
-		err = fmt.Errorf("failed to initialize chroot local repository: %w", err)
-		goto fail
-	}
-
-	return nil
-
-fail:
-	if err := UmountChrootSysfs("/"); err != nil {
-		return fmt.Errorf("failed to unmount sysfs for chroot environment: %w", err)
-	}
-	return fmt.Errorf("failed to initialize chroot environment: %w", err)
-}
-
-func StopGPGComponents(chrootPath string) error {
-	log := logger.Logger()
-	cmdExist, err := shell.IsCommandExist("gpgconf", chrootPath)
-	if err != nil {
-		return fmt.Errorf("failed to check if gpgconf command exists in chroot environment: %w", err)
-	}
-	if !cmdExist {
-		log.Debugf("gpgconf command not found in chroot environment, skipping GPG components stop")
-		return nil
-	}
-	output, err := shell.ExecCmd("gpgconf --list-components", false, chrootPath, nil)
-	if err != nil {
-		return fmt.Errorf("failed to list GPG components in chroot environment: %w", err)
-	}
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.Contains(line, ":") {
-			continue // Skip empty lines or lines without a colon
-		}
-		component := strings.TrimSpace(strings.Split(line, ":")[0])
-		log.Debugf("Stopping GPG component: %s", component)
-		if _, err := shell.ExecCmd("gpgconf --kill "+component, true, chrootPath, nil); err != nil {
-			return fmt.Errorf("failed to stop GPG component %s: %w", component, err)
-		}
+	if err = chrootEnv.initChrootLocalRepo(); err != nil {
+		return fmt.Errorf("failed to initialize chroot local repository: %w", err)
 	}
 
 	return nil
 }
 
-func CleanupChrootEnv(targetOs, targetDist, targetArch string) error {
+func (chrootEnv *ChrootEnv) CleanupChrootEnv(targetOs, targetDist, targetArch string) error {
 	log := logger.Logger()
-	if _, err := os.Stat(ChrootEnvRoot); err == nil {
-		if err := StopGPGComponents(ChrootEnvRoot); err != nil {
+	if _, err := os.Stat(chrootEnv.ChrootEnvRoot); err == nil {
+		if err := system.StopGPGComponents(chrootEnv.ChrootEnvRoot); err != nil {
 			return fmt.Errorf("failed to stop GPG components in chroot environment: %w", err)
 		}
-		if err := mount.UmountSubPath(ChrootEnvRoot); err != nil {
+		if err := mount.UmountSubPath(chrootEnv.ChrootEnvRoot); err != nil {
 			return fmt.Errorf("failed to unmount path for chroot environment: %w", err)
 		}
 	} else {
-		log.Infof("chroot environment root %s does not exist, skipping cleanup", ChrootEnvRoot)
+		log.Infof("chroot environment root %s does not exist, skipping cleanup", chrootEnv.ChrootEnvRoot)
 	}
 	return nil
 }
 
-func TdnfInstallPackage(packageName, installRoot string, repositoryIDList []string) error {
+func (chrootEnv *ChrootEnv) TdnfInstallPackage(packageName, installRoot string, repositoryIDList []string) error {
 	var installCmd string
-	chrootInstallRoot, err := GetChrootEnvPath(installRoot)
+	chrootInstallRoot, err := chrootEnv.GetChrootEnvPath(installRoot)
 	if err != nil {
 		return fmt.Errorf("failed to get chroot environment path for install root %s: %w", installRoot, err)
 	}
-	releaseVersion := GetTargetOsReleaseVersion()
-	installCmd = fmt.Sprintf("tdnf install %s --releasever %s --setopt reposdir=/etc/yum.repos.d/ --nogpgcheck --assumeyes --installroot %s",
-		packageName, releaseVersion, chrootInstallRoot)
+	releaseVersion := chrootEnv.GetTargetOsReleaseVersion()
+	installCmd = fmt.Sprintf("tdnf install %s --releasever %s --setopt reposdir=%s --nogpgcheck --assumeyes --installroot %s",
+		packageName, releaseVersion, RPMRepoConfigDir, chrootInstallRoot)
 
 	if len(repositoryIDList) > 0 {
 		installCmd += " --disablerepo=*"
@@ -376,14 +376,14 @@ func TdnfInstallPackage(packageName, installRoot string, repositoryIDList []stri
 		}
 	}
 
-	if _, err := shell.ExecCmdWithStream(installCmd, true, ChrootEnvRoot, nil); err != nil {
+	if _, err := shell.ExecCmdWithStream(installCmd, true, chrootEnv.ChrootEnvRoot, nil); err != nil {
 		return fmt.Errorf("failed to install package %s: %w", packageName, err)
 	}
 
 	return nil
 }
 
-func AptInstallPackage(packageName, installRoot string, repoSrcList []string) error {
+func (chrootEnv *ChrootEnv) AptInstallPackage(packageName, installRoot string, repoSrcList []string) error {
 	installCmd := fmt.Sprintf("apt-get install -y %s", packageName)
 
 	if len(repoSrcList) > 0 {
