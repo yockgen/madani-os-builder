@@ -1,28 +1,67 @@
 package shell
 
 import (
-	"strings"
+	"fmt"
+	"path/filepath"
+	"regexp"
 )
+
+type MockCommand struct {
+	Pattern string
+	Output  string
+	Error   error
+}
 
 type MockExecutor struct {
 	// mockExpectedOutput contains the mapping of command strings to their expected outputs and errors
-	mockExpectedOutput map[string][]interface{}
+	mockExpectedOutput []MockCommand
 }
 
-func NewMockExecutor(mockExpectedOutput map[string][]interface{}) *MockExecutor {
+func NewMockExecutor(mockExpectedOutput []MockCommand) *MockExecutor {
 	return &MockExecutor{
 		mockExpectedOutput: mockExpectedOutput}
 }
 
+func getFullCmdStr(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	var fullCmdStr string
+	envValStr := ""
+	for _, env := range envVal {
+		envValStr += env + " "
+	}
+	if chrootPath != HostPath {
+		fullCmdStr = "sudo " + envValStr + "chroot " + chrootPath + " " + cmdStr
+		chrootDir := filepath.Base(chrootPath)
+		log.Debugf("MockExecutor: Chroot " + chrootDir + " Exec: [" + cmdStr + "]")
+	} else {
+		if sudo {
+			fullCmdStr = "sudo " + envValStr + cmdStr
+			log.Debugf("MockExecutor: Host Exec with sudo: [" + cmdStr + "]")
+		} else {
+			fullCmdStr = envValStr + cmdStr
+			log.Debugf("MockExecutor: Host Exec: [" + cmdStr + "]")
+		}
+	}
+	return fullCmdStr, nil
+}
+
 func (m *MockExecutor) execCmdOverride(cmdStr string, sudo bool, chrootPath string, envVal []string) (bool, string, error) {
 	var fallback2Default = true
-	for cmdStrKeyword, MockOutput := range m.mockExpectedOutput {
-		if strings.Contains(cmdStr, cmdStrKeyword) {
+	fullCmdStr, err := getFullCmdStr(cmdStr, sudo, chrootPath, envVal)
+	if err != nil {
+		return fallback2Default, "", fmt.Errorf("failed to get full command string: %w", err)
+	}
+	for _, mockCmd := range m.mockExpectedOutput {
+		matched, err := regexp.MatchString(mockCmd.Pattern, fullCmdStr)
+		if err != nil {
+			log.Errorf("Invalid regex pattern %s: %v", mockCmd.Pattern, err)
+			continue
+		}
+		if matched {
 			fallback2Default = false
-			if MockOutput[1] != nil {
-				return fallback2Default, MockOutput[0].(string), MockOutput[1].(error)
+			if mockCmd.Error != nil {
+				return fallback2Default, mockCmd.Output, mockCmd.Error
 			} else {
-				return fallback2Default, MockOutput[0].(string), nil
+				return fallback2Default, mockCmd.Output, nil
 			}
 		}
 	}
@@ -34,6 +73,7 @@ func (m *MockExecutor) ExecCmd(cmdStr string, sudo bool, chrootPath string, envV
 	if fallback2Default {
 		return (&DefaultExecutor{}).ExecCmd(cmdStr, sudo, chrootPath, envVal)
 	} else {
+		log.Debugf("MockExecutor: output: %s", output)
 		return output, err
 	}
 }

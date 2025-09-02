@@ -2,7 +2,6 @@ package shell
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,6 +30,7 @@ var commandMap = map[string]string{
 	"cd":                 "cd", // 'cd' is a shell builtin, not a standalone command
 	"chroot":             "/usr/sbin/chroot",
 	"chmod":              "/usr/bin/chmod",
+	"command":            "command", // 'command' is a shell builtin
 	"cp":                 "/usr/bin/cp",
 	"createrepo_c":       "/usr/bin/createrepo_c",
 	"cryptsetup":         "/usr/sbin/cryptsetup",
@@ -157,15 +157,14 @@ func GetOSProxyEnvirons() map[string]string {
 // IsCommandExist checks if a command exists in the system or in a chroot environment
 func IsCommandExist(cmd string, chrootPath string) (bool, error) {
 	var cmdStr string
-	if chrootPath != HostPath {
-		cmdStr = "sudo chroot " + chrootPath + " /bin/sh -c 'command -v " + cmd + "'"
-	} else {
+	if chrootPath == HostPath {
 		cmdStr = "command -v " + cmd
+	} else {
+		cmdStr = "bash -c 'command -v " + cmd + "'"
 	}
-
-	output, err := exec.Command("bash", "-c", cmdStr).Output()
-	output = bytes.TrimSpace(output)
+	output, err := ExecCmd(cmdStr, false, chrootPath, nil)
 	if err != nil {
+		output = strings.TrimSpace(output)
 		if len(output) == 0 {
 			return false, nil
 		}

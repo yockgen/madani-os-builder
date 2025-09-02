@@ -50,8 +50,8 @@ func TestExecCmdWithInput(t *testing.T) {
 func TestExecCmdOverride(t *testing.T) {
 	originalExecutor := shell.Default
 	defer func() { shell.Default = originalExecutor }()
-	mockExpectedOutput := map[string][]interface{}{
-		"echo 'test-exec-cmd-override'": {"override-test\n", nil},
+	mockExpectedOutput := []shell.MockCommand{
+		{Pattern: "echo 'test-exec-cmd-override'", Output: "override-test\n", Error: nil},
 	}
 	shell.Default = shell.NewMockExecutor(mockExpectedOutput)
 	out, err := shell.ExecCmd("echo 'test-exec-cmd-override'", true, shell.HostPath, nil)
@@ -66,8 +66,8 @@ func TestExecCmdOverride(t *testing.T) {
 func TestExecCmdSilentOverride(t *testing.T) {
 	originalExecutor := shell.Default
 	defer func() { shell.Default = originalExecutor }()
-	mockExpectedOutput := map[string][]interface{}{
-		"echo 'test-exec-cmd-override'": {"override-test\n", nil},
+	mockExpectedOutput := []shell.MockCommand{
+		{Pattern: "echo 'test-exec-cmd-override'", Output: "override-test\n", Error: nil},
 	}
 	shell.Default = shell.NewMockExecutor(mockExpectedOutput)
 	out, err := shell.ExecCmdSilent("echo 'test-exec-cmd-override'", false, shell.HostPath, nil)
@@ -82,8 +82,8 @@ func TestExecCmdSilentOverride(t *testing.T) {
 func TestExecCmdWithStreamOverride(t *testing.T) {
 	originalExecutor := shell.Default
 	defer func() { shell.Default = originalExecutor }()
-	mockExpectedOutput := map[string][]interface{}{
-		"echo 'test-exec-cmd-override'": {"override-test\n", nil},
+	mockExpectedOutput := []shell.MockCommand{
+		{Pattern: "echo 'test-exec-cmd-override'", Output: "override-test\n", Error: nil},
 	}
 	shell.Default = shell.NewMockExecutor(mockExpectedOutput)
 	out, err := shell.ExecCmdWithStream("echo 'test-exec-cmd-override'", true, shell.HostPath, nil)
@@ -98,8 +98,8 @@ func TestExecCmdWithStreamOverride(t *testing.T) {
 func TestExecCmdWithInputOverride(t *testing.T) {
 	originalExecutor := shell.Default
 	defer func() { shell.Default = originalExecutor }()
-	mockExpectedOutput := map[string][]interface{}{
-		"echo 'test-exec-cmd-override'": {"override-test\n", nil},
+	mockExpectedOutput := []shell.MockCommand{
+		{Pattern: "echo 'test-exec-cmd-override'", Output: "override-test\n", Error: nil},
 	}
 	shell.Default = shell.NewMockExecutor(mockExpectedOutput)
 	out, err := shell.ExecCmdWithInput("input-line", "echo 'test-exec-cmd-override'", true, shell.HostPath, nil)
