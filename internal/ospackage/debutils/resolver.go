@@ -50,7 +50,7 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	// pkgMetaDir := "./builds/elxr12"
 	pkgMetaDir := buildPath
 	if err := os.MkdirAll(pkgMetaDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create pkgMetaDir: %v", err)
+		return nil, fmt.Errorf("failed to create pkgMetaDir: %w", err)
 	}
 
 	//verify release file
@@ -64,7 +64,7 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	for _, f := range localFiles {
 		if _, err := os.Stat(f); err == nil {
 			if remErr := os.Remove(f); remErr != nil {
-				return nil, fmt.Errorf("failed to remove old file %s: %v", f, remErr)
+				return nil, fmt.Errorf("failed to remove old file %s: %w", f, remErr)
 			}
 		}
 	}
@@ -72,12 +72,12 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	// Download the debian repo files
 	err := pkgfetcher.FetchPackages([]string{pkggz, releaseFile, releaseSign, pbGPGKey}, pkgMetaDir, 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch critical repo config packages: %v", err)
+		return nil, fmt.Errorf("failed to fetch critical repo config packages: %w", err)
 	}
 	// Verify the release file
 	relVryResult, err := VerifyRelease(localReleaseFile, localReleaseSign, localPBGPGKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify release file: %v", err)
+		return nil, fmt.Errorf("failed to verify release file: %w", err)
 	}
 	if !relVryResult {
 		return nil, fmt.Errorf("release file verification failed")
@@ -86,7 +86,7 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	// verify the sham256 checksum of the Packages.gz file
 	pkggzVryResult, err := VerifyPackagegz(localReleaseFile, localPkggzFile, arch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify pkg file: %v", err)
+		return nil, fmt.Errorf("failed to verify pkg file: %w", err)
 	}
 	if !pkggzVryResult {
 		return nil, fmt.Errorf("package file verification failed")
@@ -105,14 +105,14 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 
 	files, err := Decompress(PkgMetaFile, pkgMetaFileNoExt)
 	if err != nil {
-		return []ospackage.PackageInfo{}, err
+		return []ospackage.PackageInfo{}, fmt.Errorf("failed package decompress: %w", err)
 	}
-	log.Infof("decompressed files: %v", files)
+	log.Infof("decompressed files: %w", files)
 
 	//Parse the decompressed file
 	f, err := os.Open(files[0])
 	if err != nil {
-		return nil, fmt.Errorf("failed to open decompressed file: %v", err)
+		return nil, fmt.Errorf("failed to open decompressed file: %w", err)
 	}
 	defer f.Close()
 
@@ -122,7 +122,7 @@ func ParseRepositoryMetadata(baseURL string, pkggz string, releaseFile string, r
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil && err != io.EOF {
-			return nil, fmt.Errorf("error reading file: %v", err)
+			return nil, fmt.Errorf("error reading file: %w", err)
 		}
 		line = strings.TrimRight(line, "\r\n")
 
@@ -266,7 +266,7 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 				} else {
 					cmp, err := compareDebianVersions(pkg.Version, latest.Version)
 					if err != nil {
-						return nil, fmt.Errorf("failed to compare versions: %v", err)
+						return nil, fmt.Errorf("failed to compare versions: %w", err)
 					}
 					if cmp > 0 {
 						tmp := pkg
@@ -319,7 +319,7 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 				if err != nil {
 					gotMissingPkg = true
 					AddParentMissingChildPair(cur, depName+"(missing)", &parentChildPairs)
-					log.Warnf("failed to resolve multiple candidates for dependency %q of package %q: %v", depName, cur.Name, err)
+					log.Warnf("failed to resolve multiple candidates for dependency %q of package %q: %w", depName, cur.Name, err)
 					continue
 				}
 				queue = append(queue, chosenCandidate)
@@ -338,7 +338,7 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 						} else {
 							cmp, err := compareDebianVersions(pi.Version, latestProv.Version)
 							if err != nil {
-								return nil, fmt.Errorf("failed to compare versions: %v", err)
+								return nil, fmt.Errorf("failed to compare versions: %w", err)
 							}
 							if cmp > 0 {
 								tmp := pi
@@ -472,17 +472,27 @@ func BuildDependencyChains(parentChildPairs [][]ospackage.PackageInfo) string {
 	}
 
 	// Write report to JSON file in builds
-	reportPath := fmt.Sprintf("builds/dependency_missing_report_%d.json", time.Now().UnixNano())
-	f, err := os.Create(reportPath)
+	if err := os.MkdirAll(ReportPath, 0755); err != nil {
+		logger.Logger().Debugf("creating base path: %w", err)
+		return ""
+	}
+	reportFullPath := filepath.Join(ReportPath, fmt.Sprintf("dependency_missing_report_%d.json", time.Now().UnixNano()))
+	f, err := os.Create(reportFullPath)
 	if err != nil {
 		return ""
 	}
 	defer f.Close()
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(report)
+	if err := enc.Encode(report); err != nil {
+		// Remove the incomplete/corrupt file
+		f.Close()
+		os.Remove(reportFullPath)
+		logger.Logger().Debugf("fail creating report: %w", reportFullPath)
+		return ""
+	}
 
-	return reportPath
+	return reportFullPath
 }
 
 func getFullUrl(filePath string, baseUrl string) (string, error) {
@@ -766,7 +776,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	for _, candidate := range candidates {
 		cmp, err := compareDebianVersions(candidate.Version, ver)
 		if err != nil {
-			return ospackage.PackageInfo{}, fmt.Errorf("failed to compare versions for candidate %q: %v", candidate.Name, err)
+			return ospackage.PackageInfo{}, fmt.Errorf("failed to compare versions for candidate %q: %w", candidate.Name, err)
 		}
 		if cmp == 0 && op == "=" {
 			selectedCandidate = candidate
@@ -806,7 +816,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 
 	parentBase, err := extractRepoBase(parentPkg.URL)
 	if err != nil {
-		return ospackage.PackageInfo{}, fmt.Errorf("failed to extract repo base from parent package URL: %v", err)
+		return ospackage.PackageInfo{}, fmt.Errorf("failed to extract repo base from parent package URL: %w", err)
 	}
 
 	// Rule 1: find all candidates with the same base URL and return the latest version

@@ -44,6 +44,7 @@ var (
 	GzHref       string
 	Architecture string
 	UserRepo     []config.PackageRepository
+	ReportPath   = "builds"
 )
 
 // Packages returns the list of base packages
@@ -53,8 +54,7 @@ func Packages() ([]ospackage.PackageInfo, error) {
 
 	packages, err := ParseRepositoryMetadata(RepoCfg.PkgPrefix, GzHref, RepoCfg.ReleaseFile, RepoCfg.ReleaseSign, RepoCfg.PbGPGKey, RepoCfg.BuildPath, RepoCfg.Arch)
 	if err != nil {
-		log.Errorf("parsing %s failed: %v", GzHref, err)
-		return nil, err
+		return nil, fmt.Errorf("parsing default repo failed: %w", err)
 	}
 
 	log.Infof("found %d packages in deb repo", len(packages))
@@ -122,7 +122,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 
 		userPkgs, err := ParseRepositoryMetadata(rpItx.PkgPrefix, rpItx.PkgList, rpItx.ReleaseFile, rpItx.ReleaseSign, rpItx.PbGPGKey, rpItx.BuildPath, rpItx.Arch)
 		if err != nil {
-			return nil, fmt.Errorf("parsing user repo failed: %v %s %s", err, rpItx.ReleaseFile, rpItx.ReleaseSign)
+			return nil, fmt.Errorf("parsing user repo failed: %w", err)
 		}
 		allUserPackages = append(allUserPackages, userPkgs...)
 	}
@@ -170,7 +170,7 @@ func Validate(destDir string) error {
 	// Check results
 	for _, r := range results {
 		if !r.OK {
-			return fmt.Errorf("deb %s failed verification: %v", r.Path, r.Error)
+			return fmt.Errorf("deb %s failed verification: %w", r.Path, r.Error)
 		}
 	}
 	log.Info("all DEBs verified successfully")
@@ -186,8 +186,7 @@ func Resolve(req []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospack
 	// Resolve all the required dependencies for the initial seed of Debian packages
 	needed, err := ResolveDependencies(req, all)
 	if err != nil {
-		log.Errorf("resolving dependencies failed: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("resolving dependencies failed: %w", err)
 	}
 
 	log.Infof("requested %d packages, resolved to %d packages", len(req), len(needed))
@@ -237,7 +236,7 @@ func MatchRequested(requests []string, all []ospackage.PackageInfo) ([]ospackage
 	if gotMissingPkg {
 		report, err := WriteArrayToFile(requestedPkgs, "Missing Requested Packages")
 		if err != nil {
-			log.Errorf("writing missing packages report failed: %v", err)
+			return out, fmt.Errorf("writing missing packages report failed: %w", err)
 		}
 		return out, fmt.Errorf("one or more requested packages not found. See list in %s", report)
 	}
@@ -249,7 +248,10 @@ func MatchRequested(requests []string, all []ospackage.PackageInfo) ([]ospackage
 // The filename will be prefixed with the current date and time in "YYYYMMDD_HHMMSS_" format.
 func WriteArrayToFile(arr []string, title string) (string, error) {
 	now := time.Now()
-	filename := filepath.Join("builds", fmt.Sprintf("%s_%s.json", strings.ReplaceAll(title, " ", "_"), now.Format("20060102_150405")))
+	if err := os.MkdirAll(ReportPath, 0755); err != nil {
+		return "", fmt.Errorf("creating base path: %w", err)
+	}
+	filename := filepath.Join(ReportPath, fmt.Sprintf("%s_%s.json", strings.ReplaceAll(title, " ", "_"), now.Format("20060102_150405")))
 
 	// Ensure "report_type" is the first key in the output
 	type reportStruct struct {
@@ -285,21 +287,21 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 	// Fetch the entire base package list
 	all, err := Packages()
 	if err != nil {
-		return downloadPkgList, fmt.Errorf("getting packages: %v", err)
+		return downloadPkgList, fmt.Errorf("getting packages: %w", err)
 	}
 
 	// Fetch the entire user repos package list
 	userpkg, err := UserPackages()
 	if err != nil {
-		log.Warnf("getting user packages failed: %v", err)
-		return downloadPkgList, fmt.Errorf("user package fetch failed: %v", err)
+		log.Warnf("getting user packages failed: %w", err)
+		return downloadPkgList, fmt.Errorf("user package fetch failed: %w", err)
 	}
 	all = append(all, userpkg...)
 
 	// Match the packages in the template against all the packages
 	req, err := MatchRequested(pkgList, all)
 	if err != nil {
-		return downloadPkgList, fmt.Errorf("matching packages: %v", err)
+		return downloadPkgList, fmt.Errorf("matching packages: %w", err)
 	}
 	log.Infof("matched a total of %d packages", len(req))
 
@@ -310,26 +312,26 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 	// Resolve the dependencies of the requested packages
 	needed, err := Resolve(req, all)
 	if err != nil {
-		return downloadPkgList, fmt.Errorf("resolving packages: %v", err)
+		return downloadPkgList, fmt.Errorf("resolving packages: %w", err)
 	}
 	log.Infof("resolved %d packages", len(needed))
 
 	// Generate SPDX manifest, generated in temp directory
 	spdxFile := filepath.Join(config.TempDir(), manifest.DefaultSPDXFile)
 	if err := manifest.WriteSPDXToFile(needed, spdxFile); err != nil {
-		return downloadPkgList, fmt.Errorf("SPDX file: %v", err)
+		return downloadPkgList, fmt.Errorf("SPDX file: %w", err)
 	}
 
 	sorted_pkgs, err := pkgsorter.SortPackages(needed)
 	if err != nil {
-		log.Errorf("sorting packages: %v", err)
+		log.Debugf("sorting packages: %w", err)
 	}
 	log.Infof("sorted %d packages for installation", len(sorted_pkgs))
 
 	// If a dot file is specified, generate the dependency graph
 	if dotFile != "" {
 		if err := GenerateDot(needed, dotFile); err != nil {
-			log.Errorf("generating dot file: %v", err)
+			log.Debugf("generating dot file: %w", err)
 		}
 	}
 
@@ -343,22 +345,22 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 	// Ensure dest directory exists
 	absDestDir, err := filepath.Abs(destDir)
 	if err != nil {
-		return downloadPkgList, fmt.Errorf("resolving cache directory: %v", err)
+		return downloadPkgList, fmt.Errorf("resolving cache directory: %w", err)
 	}
 	if err := os.MkdirAll(absDestDir, 0755); err != nil {
-		return downloadPkgList, fmt.Errorf("creating cache directory %s: %v", absDestDir, err)
+		return downloadPkgList, fmt.Errorf("creating cache directory %s: %w", absDestDir, err)
 	}
 
 	// Download packages using configured workers and cache directory
 	log.Infof("downloading %d packages to %s using %d workers", len(urls), absDestDir, config.Workers())
 	if err := pkgfetcher.FetchPackages(urls, absDestDir, config.Workers()); err != nil {
-		return downloadPkgList, fmt.Errorf("fetch failed: %v", err)
+		return downloadPkgList, fmt.Errorf("fetch failed: %w", err)
 	}
 	log.Info("all downloads complete")
 
 	// Verify downloaded packages
 	if err := Validate(destDir); err != nil {
-		return downloadPkgList, fmt.Errorf("verification failed: %v", err)
+		return downloadPkgList, fmt.Errorf("verification failed: %w", err)
 	}
 
 	return downloadPkgList, nil
