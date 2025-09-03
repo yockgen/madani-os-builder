@@ -442,6 +442,7 @@ func TestSignImage_FileCopyErrors(t *testing.T) {
 	// Use CustomMockExecutor to create signed files so signing succeeds
 	executor := &CustomMockExecutor{
 		mockCommands: mockCommands,
+		t:           t,
 	}
 	shell.Default = executor
 
@@ -540,6 +541,7 @@ func TestSignImage_SbsignErrors(t *testing.T) {
 			if tt.name == "bootloader signing fails" {
 				executor := &CustomMockExecutor{
 					mockCommands: tt.mockCommands,
+					t:           t,
 				}
 				shell.Default = executor
 			} else {
