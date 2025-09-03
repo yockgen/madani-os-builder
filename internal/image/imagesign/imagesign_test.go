@@ -96,6 +96,10 @@ func TestSignImage_NoSecureBootKeys(t *testing.T) {
 
 func TestSignImage_MissingUKIFile(t *testing.T) {
 	installRoot := t.TempDir()
+	
+	// Store original executor and restore at the end
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
 
 	// Create temporary key files
 	keyFile := filepath.Join(installRoot, "test.key")
@@ -118,6 +122,12 @@ func TestSignImage_MissingUKIFile(t *testing.T) {
 	if err := os.MkdirAll(linuxDir, 0755); err != nil {
 		t.Fatalf("Failed to create Linux directory: %v", err)
 	}
+
+	// Set up mock executor that will fail for UKI signing (since file doesn't exist)
+	mockCommands := []shell.MockCommand{
+		{Pattern: `sbsign --key .* --cert .* --output .*/linux\.efi\.signed .*linux\.efi`, Error: errors.New("sbsign: failed to open input file")},
+	}
+	shell.Default = shell.NewMockExecutor(mockCommands)
 
 	template := &config.ImageTemplate{
 		SystemConfig: config.SystemConfig{
@@ -143,6 +153,10 @@ func TestSignImage_MissingUKIFile(t *testing.T) {
 
 func TestSignImage_MissingBootloaderFile(t *testing.T) {
 	installRoot := t.TempDir()
+	
+	// Store original executor and restore at the end
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
 
 	// Create directory structure
 	espDir := filepath.Join(installRoot, "boot", "efi", "EFI")
@@ -176,6 +190,19 @@ func TestSignImage_MissingBootloaderFile(t *testing.T) {
 	if err := os.WriteFile(cerFile, []byte("test cer"), 0644); err != nil {
 		t.Fatalf("Failed to create test cer file: %v", err)
 	}
+
+	// Set up mock executor: UKI signing succeeds but bootloader signing fails
+	mockCommands := []shell.MockCommand{
+		{Pattern: `sbsign --key .* --cert .* --output .*/linux\.efi\.signed .*linux\.efi`, Output: "UKI signing successful"},
+		{Pattern: `sbsign --key .* --cert .* --output .*/BOOTX64\.EFI\.signed .*BOOTX64\.EFI`, Error: errors.New("sbsign: failed to open BOOTX64.EFI")},
+	}
+	
+	// Use CustomMockExecutor to create UKI signed file
+	executor := &CustomMockExecutor{
+		mockCommands: mockCommands,
+		t:           t,
+	}
+	shell.Default = executor
 
 	template := &config.ImageTemplate{
 		SystemConfig: config.SystemConfig{
@@ -461,6 +488,7 @@ func TestSignImage_FileCopyErrors(t *testing.T) {
 	err := imagesign.SignImage(installRoot, template)
 	if err == nil {
 		t.Error("SignImage should fail when certificate file is unreadable")
+		return
 	}
 	if !strings.Contains(err.Error(), "failed to open certificate file") {
 		t.Errorf("Expected certificate file error, got: %v", err)
