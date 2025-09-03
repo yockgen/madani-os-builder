@@ -105,22 +105,29 @@ func executeInstallCompletion(cmd *cobra.Command, args []string) error {
 
 	switch shellType {
 	case "bash":
-		// Try to detect if bash-completion is installed
-		completionDir := "/etc/bash_completion.d"
-		if _, err := os.Stat(completionDir); os.IsNotExist(err) {
-			// Fallback to user's directory
-			completionDir = filepath.Join(homeDir, ".bash_completion.d")
-			if _, err := os.Stat(completionDir); os.IsNotExist(err) {
-				if err := os.MkdirAll(completionDir, 0755); err != nil {
-					return fmt.Errorf("could not create directory %s: %v", completionDir, err)
-				}
+		// Prefer user-scoped completions
+		userDir := filepath.Join(homeDir, ".bash_completion.d")
+		if _, err := os.Stat(userDir); os.IsNotExist(err) {
+			if err := os.MkdirAll(userDir, 0700); err != nil {
+				return fmt.Errorf("could not create directory %s: %v", userDir, err)
 			}
 		}
+		completionDir := userDir
+
+		// Optional system install if writable and explicitly requested
+		// (e.g., export IMAGE_COMPOSER_COMPLETION_SCOPE=system)
+		systemDir := "/etc/bash_completion.d"
+		if os.Getenv("IMAGE_COMPOSER_COMPLETION_SCOPE") == "system" {
+			if _, err := os.Stat(systemDir); !os.IsNotExist(err) && dirWritable(systemDir) {
+				completionDir = systemDir
+			}
+		}
+
 		targetPath = filepath.Join(completionDir, "image-composer.bash")
 	case "zsh":
 		completionDir := filepath.Join(homeDir, ".zsh/completion")
 		if _, err := os.Stat(completionDir); os.IsNotExist(err) {
-			if err := os.MkdirAll(completionDir, 0755); err != nil {
+			if err := os.MkdirAll(completionDir, 0700); err != nil {
 				return fmt.Errorf("could not create directory %s: %v", completionDir, err)
 			}
 		}
@@ -128,7 +135,7 @@ func executeInstallCompletion(cmd *cobra.Command, args []string) error {
 	case "fish":
 		completionDir := filepath.Join(homeDir, ".config/fish/completions")
 		if _, err := os.Stat(completionDir); os.IsNotExist(err) {
-			if err := os.MkdirAll(completionDir, 0755); err != nil {
+			if err := os.MkdirAll(completionDir, 0700); err != nil {
 				return fmt.Errorf("could not create directory %s: %v", completionDir, err)
 			}
 		}
@@ -136,7 +143,7 @@ func executeInstallCompletion(cmd *cobra.Command, args []string) error {
 	case "powershell":
 		profilePath := filepath.Join(homeDir, "Documents/WindowsPowerShell")
 		if _, err := os.Stat(profilePath); os.IsNotExist(err) {
-			if err := os.MkdirAll(profilePath, 0755); err != nil {
+			if err := os.MkdirAll(profilePath, 0700); err != nil {
 				return fmt.Errorf("could not create directory %s: %v", profilePath, err)
 			}
 		}
@@ -149,7 +156,7 @@ func executeInstallCompletion(cmd *cobra.Command, args []string) error {
 	}
 
 	// Write completion script to file
-	if err := os.WriteFile(targetPath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(targetPath, buf.Bytes(), 0600); err != nil {
 		return fmt.Errorf("could not write completion file: %v", err)
 	}
 
@@ -157,4 +164,15 @@ func executeInstallCompletion(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Restart your shell or source your profile to enable completion.\n")
 
 	return nil
+}
+
+// dirWritable checks if the specified directory is writable by attempting to create and remove a temporary file.
+func dirWritable(p string) bool {
+	tf, err := os.CreateTemp(p, ".probe-*")
+	if err != nil {
+		return false
+	}
+	tf.Close()
+	_ = os.Remove(tf.Name())
+	return true
 }

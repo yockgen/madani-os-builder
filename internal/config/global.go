@@ -131,7 +131,7 @@ func (gc *GlobalConfig) SaveGlobalConfig(configPath string) error {
 	// Ensure directory exists
 	dir := filepath.Dir(configPath)
 	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("creating config directory: %w", err)
 		}
 	}
@@ -152,7 +152,7 @@ func (gc *GlobalConfig) SaveGlobalConfig(configPath string) error {
 		return fmt.Errorf("marshaling config to YAML: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
@@ -298,7 +298,7 @@ func EnsureTempDir(subdir string) (string, error) {
 
 func ensureDirExists(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return os.MkdirAll(dir, 0755)
+		return os.MkdirAll(dir, 0700)
 	}
 	return nil
 }

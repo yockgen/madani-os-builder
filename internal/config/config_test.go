@@ -179,6 +179,11 @@ systemConfig:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(yamlContent); err != nil {
@@ -407,6 +412,11 @@ func TestUnsupportedFileFormat(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-*.txt")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
@@ -1124,6 +1134,11 @@ target:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(invalidYAML); err != nil {
@@ -1666,6 +1681,11 @@ func TestUnsupportedFileExtensions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create temp file: %v", err)
 		}
+		if err := tmpFile.Chmod(0600); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpFile.Name())
+			return
+		}
 		defer os.Remove(tmpFile.Name())
 
 		content := "some content"
@@ -1793,6 +1813,11 @@ systemConfig:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(yamlContent); err != nil {
@@ -1828,6 +1853,11 @@ target:
 	tmpFile, err := os.CreateTemp("", "test-*.yml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
@@ -2057,6 +2087,11 @@ systemConfig:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(yamlContent); err != nil {
@@ -2181,6 +2216,11 @@ logging:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(configContent); err != nil {
@@ -2242,6 +2282,11 @@ logging:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(invalidYAML); err != nil {
@@ -2260,6 +2305,11 @@ func TestLoadGlobalConfigWithUnsupportedFormat(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-*.json")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
@@ -2293,6 +2343,11 @@ func TestGlobalConfigSave(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-save-*.yml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
@@ -2392,6 +2447,11 @@ systemConfig:
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
+	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(yamlContent); err != nil {
@@ -2459,6 +2519,11 @@ systemConfig:
 	tmpFile, err := os.CreateTemp("", "benchmark-*.yml")
 	if err != nil {
 		b.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
@@ -2683,6 +2748,11 @@ func TestLoadAndMergeTemplateWithInvalidUserTemplate(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-*.yml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
@@ -3027,6 +3097,11 @@ systemConfig:
 	tmpFile, err := os.CreateTemp("", "test-*.yml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return
 	}
 	defer os.Remove(tmpFile.Name())
 
