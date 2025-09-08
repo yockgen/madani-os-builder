@@ -30,15 +30,16 @@ type RepoConfig struct {
 }
 
 var (
-	RepoCfg RepoConfig
-	GzHref  string
+	RepoCfg  RepoConfig
+	GzHref   string
+	UserRepo []config.PackageRepository
 )
 
 func Packages() ([]ospackage.PackageInfo, error) {
 	log := logger.Logger()
 	log.Infof("fetching packages from %s", RepoCfg.URL)
 
-	packages, err := ParsePrimary(RepoCfg.URL, GzHref)
+	packages, err := ParseRepositoryMetadata(RepoCfg.URL, GzHref)
 	if err != nil {
 		log.Errorf("parsing primary.xml.gz failed: %v", err)
 		return nil, err
@@ -46,6 +47,79 @@ func Packages() ([]ospackage.PackageInfo, error) {
 
 	log.Infof("found %d packages in rpm repo", len(packages))
 	return packages, nil
+}
+
+func UserPackages() ([]ospackage.PackageInfo, error) {
+	log := logger.Logger()
+	log.Infof("fetching packages from %s", "user package list")
+
+	repoList := make([]struct {
+		id       string
+		codename string
+		url      string
+		pkey     string
+	}, len(UserRepo))
+	for i, repo := range UserRepo {
+		repoList[i] = struct {
+			id       string
+			codename string
+			url      string
+			pkey     string
+		}{
+			id:       fmt.Sprintf("rpmcustrepo%d", i+1),
+			codename: repo.Codename,
+			url:      repo.URL,
+			pkey:     repo.PKey,
+		}
+	}
+
+	var userRepo []RepoConfig
+	for _, repoItem := range repoList {
+		id := repoItem.id
+		codename := repoItem.codename
+		baseURL := repoItem.url
+		pkey := repoItem.pkey
+
+		repo := RepoConfig{
+			Name:         id,
+			GPGCheck:     true,
+			RepoGPGCheck: true,
+			Enabled:      true,
+			GPGKey:       pkey,
+			URL:          baseURL,
+			Section:      fmt.Sprintf("[%s]", codename),
+		}
+
+		userRepo = append(userRepo, repo)
+	}
+
+	metadataXmlPath := "repodata/repomd.xml"
+	var allUserPackages []ospackage.PackageInfo
+	for _, rpItx := range userRepo {
+
+		repoMetaDataURL := GetRepoMetaDataURL(rpItx.URL, metadataXmlPath)
+		if repoMetaDataURL == "" {
+			log.Warnf("invalid repo metadata URL: %s/%s, skipping", rpItx.URL, metadataXmlPath)
+			continue
+		}
+
+		primaryXmlURL, err := FetchPrimaryURL(repoMetaDataURL)
+		if err != nil {
+			return nil, fmt.Errorf("fetching primary.xml.gz URL failed: %w", err)
+		}
+		userPkgs, err := ParseRepositoryMetadata(rpItx.URL, primaryXmlURL)
+		if err != nil {
+			return nil, fmt.Errorf("parsing user repo failed: %w", err)
+		}
+		allUserPackages = append(allUserPackages, userPkgs...)
+	}
+
+	// return allUserPackages, nil
+
+	for _, pkg := range allUserPackages {
+		log.Debugf("rpm pkg -> %s %s %s", pkg.Name, pkg.Version, pkg.URL)
+	}
+	return []ospackage.PackageInfo{}, nil //fmt.Errorf("yockgen user package fetching not supported for rpm")
 }
 
 func MatchRequested(requests []string, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
@@ -208,6 +282,14 @@ func DownloadPackages(pkgList []string, destDir, dotFile string) ([]string, erro
 	if err != nil {
 		return downloadPkgList, fmt.Errorf("getting packages: %v", err)
 	}
+
+	// Fetch the entire user repos package list
+	userpkg, err := UserPackages()
+	if err != nil {
+		log.Debugf("getting user packages failed: %v", err)
+		return downloadPkgList, fmt.Errorf("user package fetch failed: %w", err)
+	}
+	all = append(all, userpkg...)
 
 	// Match the packages in the template against all the packages
 	req, err := MatchRequested(pkgList, all)

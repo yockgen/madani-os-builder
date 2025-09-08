@@ -188,8 +188,8 @@ func ResolvePackageInfos(
 	return result, nil
 }
 
-// ParsePrimary parses the repodata/primary.xml(.gz/.zst) file from a given base URL.
-func ParsePrimary(baseURL, gzHref string) ([]ospackage.PackageInfo, error) {
+// ParseRepositoryMetadata parses the repodata/primary.xml(.gz/.zst) file from a given base URL.
+func ParseRepositoryMetadata(baseURL, gzHref string) ([]ospackage.PackageInfo, error) {
 
 	client := network.NewSecureHTTPClient()
 	resp, err := client.Get(baseURL + gzHref)
@@ -382,4 +382,78 @@ func ParsePrimary(baseURL, gzHref string) ([]ospackage.PackageInfo, error) {
 		}
 	}
 	return infos, nil
+}
+
+// FetchPrimaryURL downloads repomd.xml and returns the href of the primary metadata.
+func FetchPrimaryURL(repomdURL string) (string, error) {
+	resp, err := http.Get(repomdURL)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", repomdURL, err)
+	}
+	defer resp.Body.Close()
+
+	dec := xml.NewDecoder(resp.Body)
+
+	// Walk the tokens looking for <data type="primary">
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+		se, ok := tok.(xml.StartElement)
+		if !ok || se.Name.Local != "data" {
+			continue
+		}
+		// Check its type attribute
+		var isPrimary bool
+		for _, attr := range se.Attr {
+			if attr.Name.Local == "type" && attr.Value == "primary" {
+				isPrimary = true
+				break
+			}
+		}
+		if !isPrimary {
+			// Skip this <data> section
+			if err := dec.Skip(); err != nil {
+				return "", fmt.Errorf("error skipping token: %w", err)
+			}
+			continue
+		}
+
+		// Inside <data type="primary">, look for <location href="..."/>
+		for {
+			tok2, err := dec.Token()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return "", err
+			}
+			// If we hit the end of this <data> element, bail out
+			if ee, ok := tok2.(xml.EndElement); ok && ee.Name.Local == "data" {
+				break
+			}
+			if le, ok := tok2.(xml.StartElement); ok && le.Name.Local == "location" {
+				// Pull the href attribute
+				for _, attr := range le.Attr {
+					if attr.Name.Local == "href" {
+						return attr.Value, nil
+					}
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("primary location not found in %s", repomdURL)
+}
+
+func GetRepoMetaDataURL(baseURL, repoMetaXmlPath string) string {
+	repoMetaDataURL := strings.TrimRight(baseURL, "/") + "/" + repoMetaXmlPath
+	// Check if baseURL is a valid URL,
+	if !strings.HasPrefix(repoMetaDataURL, "http://") && !strings.HasPrefix(repoMetaDataURL, "https://") {
+		return ""
+	}
+	return repoMetaDataURL
 }
