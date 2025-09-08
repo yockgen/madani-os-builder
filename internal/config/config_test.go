@@ -2840,14 +2840,16 @@ func TestPackageRepositories(t *testing.T) {
 		},
 		PackageRepositories: []PackageRepository{
 			{
-				Codename: "test-repo1",
-				URL:      "https://test.example.com/repo1",
-				PKey:     "https://test.example.com/key1.pub",
+				Codename:  "test-repo1",
+				URL:       "https://test.example.com/repo1",
+				PKey:      "https://test.example.com/key1.pub",
+				Component: "main",
 			},
 			{
-				Codename: "test-repo2",
-				URL:      "https://test.example.com/repo2",
-				PKey:     "https://test.example.com/key2.pub",
+				Codename:  "test-repo2",
+				URL:       "https://test.example.com/repo2",
+				PKey:      "https://test.example.com/key2.pub",
+				Component: "restricted",
 			},
 		},
 		SystemConfig: SystemConfig{
@@ -2879,6 +2881,18 @@ func TestPackageRepositories(t *testing.T) {
 		}
 		if repo1.PKey != "https://test.example.com/key1.pub" {
 			t.Errorf("expected repo1 pkey 'https://test.example.com/key1.pub', got '%s'", repo1.PKey)
+		}
+		if repo1.Component != "main" {
+			t.Errorf("expected repo1 component 'main', got '%s'", repo1.Component)
+		}
+	}
+
+	repo2 := template.GetRepositoryByCodename("test-repo2")
+	if repo2 == nil {
+		t.Errorf("expected to find test-repo2")
+	} else {
+		if repo2.Component != "restricted" {
+			t.Errorf("expected repo2 component 'restricted', got '%s'", repo2.Component)
 		}
 	}
 
@@ -3081,9 +3095,11 @@ packageRepositories:
   - codename: "test-repo1"
     url: "https://test.example.com/repo1"
     pkey: "https://test.example.com/key1.pub"
+    component: "main"
   - codename: "test-repo2"
     url: "https://test.example.com/repo2"
     pkey: "https://test.example.com/key2.pub"
+    component: "restricted"
 
 systemConfig:
   name: test

@@ -198,7 +198,7 @@ fail:
 func (imageOs *ImageOs) initRootfsForDeb(installRoot string) error {
 	essentialPkgsList, err := imageOs.chrootEnv.GetChrootEnvEssentialPackageList()
 	if err != nil {
-		return fmt.Errorf("failed to get essential packages list: %v", err)
+		return fmt.Errorf("failed to get essential packages list: %w", err)
 	}
 	pkgListStr := strings.Join(essentialPkgsList, ",")
 	localRepoConfigChrootPath := "/etc/apt/sources.list.d/local.list"

@@ -99,15 +99,15 @@ func (p *Emt) Init(dist, arch string) error {
 
 func (p *Emt) PreProcess(template *config.ImageTemplate) error {
 	if err := p.installHostDependency(); err != nil {
-		return fmt.Errorf("failed to install host dependencies: %v", err)
+		return fmt.Errorf("failed to install host dependencies: %w", err)
 	}
 
 	if err := p.downloadImagePkgs(template); err != nil {
-		return fmt.Errorf("failed to download image packages: %v", err)
+		return fmt.Errorf("failed to download image packages: %w", err)
 	}
 
 	if err := p.chrootEnv.InitChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
-		return fmt.Errorf("failed to initialize chroot environment: %v", err)
+		return fmt.Errorf("failed to initialize chroot environment: %w", err)
 	}
 	return nil
 }
@@ -116,12 +116,12 @@ func (p *Emt) BuildImage(template *config.ImageTemplate) error {
 	if config.TargetImageType == "iso" {
 		err := p.isoMaker.BuildIsoImage(template)
 		if err != nil {
-			return fmt.Errorf("failed to build ISO image: %v", err)
+			return fmt.Errorf("failed to build ISO image: %w", err)
 		}
 	} else {
 		err := p.rawMaker.BuildRawImage(template)
 		if err != nil {
-			return fmt.Errorf("failed to build raw image: %v", err)
+			return fmt.Errorf("failed to build raw image: %w", err)
 		}
 	}
 	return nil
@@ -129,7 +129,7 @@ func (p *Emt) BuildImage(template *config.ImageTemplate) error {
 
 func (p *Emt) PostProcess(template *config.ImageTemplate, err error) error {
 	if err := p.chrootEnv.CleanupChrootEnv(config.TargetOs, config.TargetDist, config.TargetArch); err != nil {
-		return fmt.Errorf("failed to cleanup chroot environment: %v", err)
+		return fmt.Errorf("failed to cleanup chroot environment: %w", err)
 	}
 	return err
 }

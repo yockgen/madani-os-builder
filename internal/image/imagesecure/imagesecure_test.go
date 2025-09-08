@@ -1,6 +1,7 @@
 package imagesecure_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,182 +9,431 @@ import (
 
 	"github.com/open-edge-platform/image-composer/internal/config"
 	"github.com/open-edge-platform/image-composer/internal/image/imagesecure"
+	"github.com/open-edge-platform/image-composer/internal/utils/shell"
 )
 
 func TestConfigImageSecurity(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Store original executor and restore at the end
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
+
 	tests := []struct {
 		name         string
-		fstabContent string
-		expectRootRO bool
-		expectError  bool
+		installRoot  string
+		template     *config.ImageTemplate
+		mockCommands []shell.MockCommand
+		wantErr      bool
+		errContains  string
 	}{
 		{
-			name: "root_filesystem_present",
-			fstabContent: `UUID=12345678-1234-1234-1234-123456789012 /               ext4    defaults        1       1
-`,
-			expectRootRO: false, // Changed from true to false since function doesn't modify fstab
-			expectError:  false,
+			name:        "successful config with ro rootfs",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "defaults,ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				// Mock all mkdir commands that might be called in prepareOverlayDir
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				// Mock systemctl command that might be called in createOverlayMntSvc
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+				// Mock tee command used by file.Append for fstab updates
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				// Mock chmod command for script permissions
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+			},
+			wantErr: false,
 		},
 		{
-			name: "no_root_filesystem",
-			fstabContent: `UUID=87654321-4321-4321-4321-210987654321 /boot           ext4    defaults        1       2
-`,
-			expectRootRO: false,
-			expectError:  false,
+			name:        "rootfs partition with ID and ro option",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							ID:           "rootfs",
+							MountOptions: "ro,nodev",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "no ro option - should skip overlay config",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "defaults,rw",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{},
+			wantErr:      false,
+		},
+		{
+			name:        "rootfs partition with Name and ro option",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Name:         "rootfs",
+							MountOptions: "defaults,ro,sync",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "no rootfs partition found - should skip",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-swap",
+							MountOptions: "defaults",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{},
+			wantErr:      false,
+		},
+		{
+			name:        "empty mount options - should skip",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{},
+			wantErr:      false,
+		},
+		{
+			name:         "nil template",
+			installRoot:  tempDir,
+			template:     nil,
+			mockCommands: []shell.MockCommand{},
+			wantErr:      true, // This should error due to nil pointer dereference
+		},
+		{
+			name:        "empty partitions list",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{},
+				},
+			},
+			mockCommands: []shell.MockCommand{},
+			wantErr:      false,
+		},
+		{
+			name:        "ro option with spaces",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "defaults, ro ,nodev",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "multiple partitions - only one with ro",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-swap",
+							MountOptions: "defaults",
+						},
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "ro",
+						},
+						{
+							Type:         "esp",
+							MountOptions: "defaults",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "ro as substring should not match",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "errors=remount-ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{},
+			wantErr:      false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
+			// Create necessary directory structure for file operations
+			etcDir := filepath.Join(tt.installRoot, "etc")
+			systemdDir := filepath.Join(etcDir, "systemd", "system")
+			usrBinDir := filepath.Join(tt.installRoot, "usr", "local", "bin")
 
-			template := &config.ImageTemplate{
-				Image:  config.ImageInfo{Name: "test", Version: "1.0"},
-				Target: config.TargetInfo{OS: "linux", Arch: "x86_64"},
-			}
-
-			// Create etc directory and fstab file
-			etcDir := filepath.Join(tempDir, "etc")
 			if err := os.MkdirAll(etcDir, 0755); err != nil {
 				t.Fatalf("Failed to create etc directory: %v", err)
 			}
+			if err := os.MkdirAll(systemdDir, 0755); err != nil {
+				t.Fatalf("Failed to create systemd directory: %v", err)
+			}
+			if err := os.MkdirAll(usrBinDir, 0755); err != nil {
+				t.Fatalf("Failed to create usr/local/bin directory: %v", err)
+			}
 
+			// Create empty fstab file
 			fstabPath := filepath.Join(etcDir, "fstab")
-			if err := os.WriteFile(fstabPath, []byte(tt.fstabContent), 0644); err != nil {
+			if err := os.WriteFile(fstabPath, []byte(""), 0644); err != nil {
 				t.Fatalf("Failed to create fstab file: %v", err)
 			}
 
-			// Store original content for comparison
-			originalContent, err := os.ReadFile(fstabPath)
-			if err != nil {
-				t.Fatalf("Failed to read original fstab: %v", err)
+			// Create tmp directory for temp files (used by file.Append)
+			tmpDir := "./tmp"
+			if err := os.MkdirAll(tmpDir, 0755); err != nil {
+				t.Fatalf("Failed to create tmp directory: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			shell.Default = shell.NewMockExecutor(tt.mockCommands)
+
+			// Special handling for nil template test to catch panic
+			if tt.template == nil {
+				defer func() {
+					if r := recover(); r != nil {
+						if !tt.wantErr {
+							t.Errorf("ConfigImageSecurity() panicked = %v, wantErr %v", r, tt.wantErr)
+						}
+						// Expected panic for nil template - convert to expected behavior
+					}
+				}()
 			}
 
-			// Call the function
-			err = imagesecure.ConfigImageSecurity(tempDir, template)
+			err := imagesecure.ConfigImageSecurity(tt.installRoot, tt.template)
 
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-				return
+			if tt.wantErr && err == nil && tt.template != nil {
+				t.Errorf("ConfigImageSecurity() error = nil, wantErr %v", tt.wantErr)
 			}
-
-			if err != nil {
-				t.Fatalf("ConfigImageSecurity failed: %v", err)
-			}
-
-			// Verify fstab file still exists and wasn't corrupted
-			if _, err := os.Stat(fstabPath); os.IsNotExist(err) {
-				t.Fatalf("fstab file was removed unexpectedly")
-			}
-
-			// Check if root filesystem has ro option
-			modifiedContent, err := os.ReadFile(fstabPath)
-			if err != nil {
-				t.Fatalf("Failed to read modified fstab: %v", err)
-			}
-
-			foundRootWithRO := checkRootHasROOption(string(modifiedContent))
-
-			if tt.expectRootRO != foundRootWithRO {
-				t.Errorf("Expected root RO=%v, got %v", tt.expectRootRO, foundRootWithRO)
-				t.Logf("Original fstab:\n%s", string(originalContent))
-				t.Logf("Modified fstab:\n%s", string(modifiedContent))
-			}
-
-			// Verify the function executed without corrupting the file
-			if len(string(modifiedContent)) == 0 {
-				t.Error("fstab file was emptied unexpectedly")
+			if !tt.wantErr && err != nil {
+				t.Errorf("ConfigImageSecurity() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestConfigImageSecurityMissingDirectory(t *testing.T) {
-	template := &config.ImageTemplate{
-		Image:  config.ImageInfo{Name: "test", Version: "1.0"},
-		Target: config.TargetInfo{OS: "linux", Arch: "x86_64"},
-	}
-
-	// Test with non-existent directory
-	err := imagesecure.ConfigImageSecurity("/non/existent/path", template)
-
-	// The function should handle missing directories gracefully
-	// Adjust this expectation based on the actual implementation
-	if err == nil {
-		t.Log("Function handled missing directory gracefully")
-	} else {
-		t.Logf("Function returned error for missing directory: %v", err)
-	}
-}
-
-func TestConfigImageSecurityNilTemplate(t *testing.T) {
+// Test error cases with failing commands
+func TestConfigImageSecurity_ErrorCases(t *testing.T) {
 	tempDir := t.TempDir()
 
-	// The function should panic or return an error with nil template
-	// Let's catch the panic and convert it to a proper test failure expectation
-	defer func() {
-		if r := recover(); r != nil {
-			// This is expected behavior - the function panics with nil template
-			t.Logf("Function panicked with nil template as expected: %v", r)
-		}
-	}()
+	// Store original executor and restore at the end
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
 
-	err := imagesecure.ConfigImageSecurity(tempDir, nil)
-
-	// If we get here without panic, check if error was returned
-	if err != nil {
-		t.Logf("Function returned error for nil template: %v", err)
-	} else {
-		t.Log("Function handled nil template gracefully")
+	tests := []struct {
+		name         string
+		installRoot  string
+		template     *config.ImageTemplate
+		mockCommands []shell.MockCommand
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:        "mkdir command fails",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Error: errors.New("Permission denied")},
+			},
+			wantErr:     true,
+			errContains: "failed to prepare ESP directory",
+		},
+		{
+			name:        "systemctl enable fails",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Error: errors.New("Failed to enable service")},
+			},
+			wantErr:     true,
+			errContains: "failed to create overlay mounting service",
+		},
+		{
+			name:        "file append fails for fstab",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .*/fstab >/dev/null`, Error: errors.New("Disk full")},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""}, // Allow other tee commands
+				{Pattern: `sudo chmod -R 755 .*`, Output: ""},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+			},
+			wantErr:     true,
+			errContains: "failed to update fstab",
+		},
+		{
+			name:        "chmod fails",
+			installRoot: tempDir,
+			template: &config.ImageTemplate{
+				Disk: config.DiskConfig{
+					Partitions: []config.PartitionInfo{
+						{
+							Type:         "linux-root-amd64",
+							MountOptions: "ro",
+						},
+					},
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: `sudo chroot .* mkdir -p .*`, Output: ""},
+				{Pattern: `cat .*/tmp/fileappend-.* \| sudo tee -a .* >/dev/null`, Output: ""},
+				{Pattern: `sudo chmod -R 755 .*`, Error: errors.New("Permission denied")},
+				{Pattern: `sudo chroot .* bash -c "systemctl enable setup-overlay\.service"`, Output: ""},
+			},
+			wantErr:     true,
+			errContains: "failed to create overlay mounting service",
+		},
 	}
-}
 
-// Helper function to check if root filesystem has ro option
-func checkRootHasROOption(fstabContent string) bool {
-	lines := strings.Split(fstabContent, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create necessary directory structure for file operations
+			etcDir := filepath.Join(tt.installRoot, "etc")
+			systemdDir := filepath.Join(etcDir, "systemd", "system")
+			usrBinDir := filepath.Join(tt.installRoot, "usr", "local", "bin")
 
-		fields := strings.Fields(line)
-		if len(fields) >= 4 && fields[1] == "/" {
-			options := fields[3]
-			return strings.Contains(options, "ro")
-		}
-	}
-	return false
-}
+			if err := os.MkdirAll(etcDir, 0755); err != nil {
+				t.Fatalf("Failed to create etc directory: %v", err)
+			}
+			if err := os.MkdirAll(systemdDir, 0755); err != nil {
+				t.Fatalf("Failed to create systemd directory: %v", err)
+			}
+			if err := os.MkdirAll(usrBinDir, 0755); err != nil {
+				t.Fatalf("Failed to create usr/local/bin directory: %v", err)
+			}
 
-// Benchmark test for performance
-func BenchmarkConfigImageSecurity(b *testing.B) {
-	tempDir := b.TempDir()
+			// Create empty fstab file
+			fstabPath := filepath.Join(etcDir, "fstab")
+			if err := os.WriteFile(fstabPath, []byte(""), 0644); err != nil {
+				t.Fatalf("Failed to create fstab file: %v", err)
+			}
 
-	template := &config.ImageTemplate{
-		Image:  config.ImageInfo{Name: "bench", Version: "1.0"},
-		Target: config.TargetInfo{OS: "linux", Arch: "x86_64"},
-	}
+			// Create tmp directory for temp files (used by file.Append)
+			tmpDir := "./tmp"
+			if err := os.MkdirAll(tmpDir, 0755); err != nil {
+				t.Fatalf("Failed to create tmp directory: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
 
-	// Create test fstab
-	etcDir := filepath.Join(tempDir, "etc")
-	if err := os.MkdirAll(etcDir, 0755); err != nil {
-		b.Fatalf("Failed to create etc directory: %v", err)
-	}
-	fstabPath := filepath.Join(etcDir, "fstab")
+			// Enhanced shell mock commands that might include file.Append commands if needed
+			shell.Default = shell.NewMockExecutor(tt.mockCommands)
 
-	fstabContent := `UUID=12345678-1234-1234-1234-123456789012 /               ext4    defaults        1       1
-UUID=87654321-4321-4321-4321-210987654321 /boot           ext4    defaults        1       2`
+			err := imagesecure.ConfigImageSecurity(tt.installRoot, tt.template)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := os.WriteFile(fstabPath, []byte(fstabContent), 0644); err != nil {
-			b.Fatalf("Failed to write fstab: %v", err)
-		}
-		if err := imagesecure.ConfigImageSecurity(tempDir, template); err != nil {
-			b.Fatalf("ConfigImageSecurity failed: %v", err)
-		}
+			if tt.wantErr && err == nil {
+				t.Errorf("ConfigImageSecurity() error = nil, wantErr %v", tt.wantErr)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ConfigImageSecurity() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && tt.errContains != "" {
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("ConfigImageSecurity() error = %v, should contain %v", err, tt.errContains)
+				}
+			}
+		})
 	}
 }

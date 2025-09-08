@@ -38,10 +38,11 @@ type DiskConfig struct {
 }
 
 type PackageRepository struct {
-	ID       string `yaml:"id,omitempty"` // Auto-assigned
-	Codename string `yaml:"codename"`     // Repository identifier/codename
-	URL      string `yaml:"url"`          // Repository base URL
-	PKey     string `yaml:"pkey"`         // Public GPG key URL for verification
+	ID        string `yaml:"id,omitempty"`        // Auto-assigned
+	Codename  string `yaml:"codename"`            // Repository identifier/codename
+	URL       string `yaml:"url"`                 // Repository base URL
+	PKey      string `yaml:"pkey"`                // Public GPG key URL for verification
+	Component string `yaml:"component,omitempty"` // Repository component (e.g., "main", "restricted")
 }
 
 // ImageTemplate represents the YAML image template structure (unchanged)

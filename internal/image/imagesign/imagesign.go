@@ -73,7 +73,7 @@ func SignImage(installRoot string, template *config.ImageTemplate) error {
 	// Getting image build directory
 	globalWorkDir, err := config.WorkDir()
 	if err != nil {
-		return fmt.Errorf("failed to get global work directory: %v", err)
+		return fmt.Errorf("failed to get global work directory: %w", err)
 	}
 	imageBuildDir := filepath.Join(globalWorkDir, config.ProviderId, "imagebuild")
 	sysConfigName := template.GetSystemConfigName()
