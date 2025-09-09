@@ -102,7 +102,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 		if strings.TrimSpace(component) == "" {
 			component = "main"
 		}
-		for _, componentName := range slice.SplitCSV(component) {
+		for _, componentName := range slice.SplitBySpace(component) {
 			for _, arch := range strings.Split(archs, ",") {
 				package_list_url := GetPackagesNames(baseURL, codename, arch, componentName)
 				if package_list_url == "" {

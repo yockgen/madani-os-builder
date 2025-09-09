@@ -73,8 +73,8 @@ func RemoveStringFromSlice(slice []string, str string) []string {
 }
 
 // split string and clean
-func SplitCSV(s string) []string {
-	parts := strings.Split(s, ",")
+func SplitBySpace(s string) []string {
+	parts := strings.Split(s, " ")
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
