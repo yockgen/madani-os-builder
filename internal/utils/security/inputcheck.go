@@ -40,8 +40,8 @@ func ValidateString(name, s string, lim Limits) error {
 	if strings.ContainsRune(s, '\x00') {
 		return fmt.Errorf("%s: contains NUL byte", name)
 	}
-	if len(s) > lim.MaxString {
-		return fmt.Errorf("%s: too long (%d > %d)", name, len(s), lim.MaxString)
+	if utf8.RuneCountInString(s) > lim.MaxString {
+		return fmt.Errorf("%s: too long (%d > %d)", name, utf8.RuneCountInString(s), lim.MaxString)
 	}
 	for _, r := range s {
 		if r == '\n' && lim.AllowNL {
