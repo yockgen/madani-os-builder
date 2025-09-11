@@ -15,6 +15,7 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/ospackage/pkgfetcher"
 	"github.com/open-edge-platform/image-composer/internal/ospackage/pkgsorter"
 	"github.com/open-edge-platform/image-composer/internal/utils/logger"
+	"github.com/open-edge-platform/image-composer/internal/utils/slice"
 )
 
 // repoConfig hold repo related info
@@ -67,22 +68,25 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 	log.Infof("fetching packages from %s", "user package list")
 
 	repoList := make([]struct {
-		id       string
-		codename string
-		url      string
-		pkey     string
+		id        string
+		codename  string
+		url       string
+		pkey      string
+		component string
 	}, len(UserRepo))
 	for i, repo := range UserRepo {
 		repoList[i] = struct {
-			id       string
-			codename string
-			url      string
-			pkey     string
+			id        string
+			codename  string
+			url       string
+			pkey      string
+			component string
 		}{
-			id:       fmt.Sprintf("custrepo%d", i+1),
-			codename: repo.Codename,
-			url:      repo.URL,
-			pkey:     repo.PKey,
+			id:        fmt.Sprintf("custrepo%d", i+1),
+			codename:  repo.Codename,
+			url:       repo.URL,
+			pkey:      repo.PKey,
+			component: repo.Component,
 		}
 	}
 
@@ -93,27 +97,32 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 		baseURL := repoItem.url
 		pkey := repoItem.pkey
 		archs := Architecture + ",all"
-		for _, arch := range strings.Split(archs, ",") {
-			// check if package list exist for each arch
-			package_list_url := baseURL + "/dists/" + codename + "/main/binary-" + arch + "/Packages.gz"
-			if !checkFileExists(package_list_url) {
-				log.Warnf("package list does not exist for arch %s at %s, skipping", arch, package_list_url)
-				continue
+		releaseNm := "Release"
+		component := repoItem.component
+		if strings.TrimSpace(component) == "" {
+			component = "main"
+		}
+		for _, componentName := range slice.SplitBySpace(component) {
+			for _, arch := range strings.Split(archs, ",") {
+				package_list_url := GetPackagesNames(baseURL, codename, arch, componentName)
+				if package_list_url == "" {
+					continue // No valid package list found for this arch/component
+				}
+				repo := RepoConfig{
+					PkgList:      package_list_url,
+					ReleaseFile:  fmt.Sprintf("%s/dists/%s/%s", baseURL, codename, releaseNm),
+					ReleaseSign:  fmt.Sprintf("%s/dists/%s/%s.gpg", baseURL, codename, releaseNm),
+					PkgPrefix:    baseURL,
+					Name:         id,
+					GPGCheck:     true,
+					RepoGPGCheck: true,
+					Enabled:      true,
+					PbGPGKey:     pkey,
+					BuildPath:    fmt.Sprintf("./builds/%s_%s_%s", id, arch, componentName),
+					Arch:         arch,
+				}
+				userRepo = append(userRepo, repo)
 			}
-			repo := RepoConfig{
-				PkgList:      package_list_url,
-				ReleaseFile:  fmt.Sprintf("%s/dists/%s/Release", baseURL, codename),
-				ReleaseSign:  fmt.Sprintf("%s/dists/%s/Release.gpg", baseURL, codename),
-				PkgPrefix:    baseURL,
-				Name:         id,
-				GPGCheck:     true,
-				RepoGPGCheck: true,
-				Enabled:      true,
-				PbGPGKey:     pkey,
-				BuildPath:    fmt.Sprintf("./builds/%s_%s", id, arch),
-				Arch:         arch,
-			}
-			userRepo = append(userRepo, repo)
 		}
 	}
 
@@ -158,9 +167,9 @@ func Validate(destDir string) error {
 	}
 
 	// Create a simple dictionary (map) to store all records from PkgChecksum
-	checksumMap := make(map[string]string)
+	checksumMap := make(map[string][]string)
 	for _, pc := range PkgChecksum {
-		checksumMap[pc.Name] = pc.Checksum
+		checksumMap[pc.Name] = append(checksumMap[pc.Name], pc.Checksum)
 	}
 
 	start := time.Now()
@@ -186,6 +195,7 @@ func Resolve(req []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospack
 	// Resolve all the required dependencies for the initial seed of Debian packages
 	needed, err := ResolveDependencies(req, all)
 	if err != nil {
+		log.Debugf("resolving dependencies failed: %v", err)
 		return nil, fmt.Errorf("resolving dependencies failed: %w", err)
 	}
 
@@ -193,7 +203,7 @@ func Resolve(req []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospack
 	log.Infof("need a total of %d DEBs (including dependencies)", len(needed))
 
 	for _, pkg := range needed {
-		log.Debugf("-> %s", filepath.Base(pkg.URL))
+		log.Debugf("%s %s -> %s", pkg.Name, pkg.Version, filepath.Base(pkg.URL))
 	}
 
 	// Adding full packages to the pkgChecksum list
@@ -293,7 +303,7 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 	// Fetch the entire user repos package list
 	userpkg, err := UserPackages()
 	if err != nil {
-		log.Warnf("getting user packages failed: %w", err)
+		log.Debugf("getting user packages failed: %v", err)
 		return downloadPkgList, fmt.Errorf("user package fetch failed: %w", err)
 	}
 	all = append(all, userpkg...)
@@ -304,10 +314,6 @@ func DownloadPackages(pkgList []string, destDir string, dotFile string) ([]strin
 		return downloadPkgList, fmt.Errorf("matching packages: %w", err)
 	}
 	log.Infof("matched a total of %d packages", len(req))
-
-	for _, pkg := range req {
-		log.Debugf("-> %s", filepath.Base(pkg.URL))
-	}
 
 	// Resolve the dependencies of the requested packages
 	needed, err := Resolve(req, all)

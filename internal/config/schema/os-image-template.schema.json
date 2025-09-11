@@ -261,6 +261,11 @@
           "type": "string",
           "description": "Public GPG key URL for package verification",
           "format": "uri"
+        },
+        "component": {
+          "type": "string",
+          "description": "Repository component (e.g., 'main', 'restricted')",
+          "minLength": 1
         }
       },
       "required": ["codename", "url", "pkey"],

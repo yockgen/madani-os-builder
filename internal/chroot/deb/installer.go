@@ -13,6 +13,11 @@ import (
 
 var log = logger.Logger()
 
+type DebInstallerInterface interface {
+	UpdateLocalDebRepo(cacheDir, arch string) error
+	InstallDebPkg(configDir, chrootPath, cacheDir string, packages []string) error
+}
+
 type DebInstaller struct {
 }
 
@@ -22,20 +27,20 @@ func NewDebInstaller() *DebInstaller {
 
 func (debInstaller *DebInstaller) cleanupOnSuccess(repoPath string, err *error) {
 	if umountErr := mount.UmountPath(repoPath); umountErr != nil {
-		log.Errorf("failed to unmount debian local repository: %v", umountErr)
+		log.Errorf("Failed to unmount debian local repository: %v", umountErr)
 		*err = fmt.Errorf("failed to unmount debian local repository: %w", umountErr)
 	}
 }
 
 func (debInstaller *DebInstaller) cleanupOnError(chrootEnvPath, repoPath string, err *error) {
 	if umountErr := mount.UmountPath(repoPath); umountErr != nil {
-		log.Errorf("failed to unmount debian local repository: %v", umountErr)
+		log.Errorf("Failed to unmount debian local repository: %v", umountErr)
 		*err = fmt.Errorf("operation failed: %w, cleanup errors: %v", *err, umountErr)
 		return
 	}
 
 	if _, RemoveErr := shell.ExecCmd("rm -rf "+chrootEnvPath, true, "", nil); RemoveErr != nil {
-		log.Errorf("failed to remove chroot environment build path: %v", RemoveErr)
+		log.Errorf("Failed to remove chroot environment build path: %v", RemoveErr)
 		*err = fmt.Errorf("operation failed: %w, cleanup errors: %v", *err, RemoveErr)
 	}
 }
@@ -105,7 +110,7 @@ func (debInstaller *DebInstaller) InstallDebPkg(targetOsConfigDir, chrootEnvPath
 	}()
 
 	if _, err := os.Stat(chrootEnvPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(chrootEnvPath, 0755); err != nil {
+		if err := os.MkdirAll(chrootEnvPath, 0700); err != nil {
 			log.Errorf("Failed to create chroot environment directory: %v", err)
 			return fmt.Errorf("failed to create chroot environment directory: %w", err)
 		}
