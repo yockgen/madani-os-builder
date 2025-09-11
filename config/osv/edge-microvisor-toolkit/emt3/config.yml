@@ -1,6 +1,9 @@
+# Edge Microvisor Toolkit emt3 OS Configuration
+# This file defines architecture-specific build configurations for emt3
+
 x86_64:
-  dist: emt3
-  arch: x86_64
-  pkgType: rpm
-  chrootenvConfigFile: chrootenvconfigs/chrootenv_x86_64.yml
-  releaseVersion: "3.0"
+  dist: emt3                                        # Distribution identifier
+  arch: x86_64                                      # Target architecture
+  pkgType: rpm                                      # Package management system
+  chrootenvConfigFile: chrootenvconfigs/chrootenv_x86_64.yml  # Path to chrootenv config
+  releaseVersion: "3.0"                             # Distribution release version
