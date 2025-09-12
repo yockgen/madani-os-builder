@@ -23,6 +23,11 @@ import (
 	"github.com/open-edge-platform/image-composer/internal/utils/system"
 )
 
+const (
+	chrootenvSchemaName = "chrootenv-config.schema.json"
+	osConfigSchemaName  = "os-config.schema.json"
+)
+
 var log = logger.Logger()
 
 type ChrootBuilderInterface interface {
@@ -80,6 +85,18 @@ func NewChrootBuilder(targetOs string, targetDist string, targetArch string) (*C
 		log.Errorf("Target OS config file does not exist: %s", targetOsConfigFile)
 		return nil, fmt.Errorf("target OS config file does not exist: %s", targetOsConfigFile)
 	}
+
+	// Read the raw YAML data for validation
+	data, err := security.SafeReadFile(targetOsConfigFile, security.RejectSymlinks)
+	if err != nil {
+		return nil, fmt.Errorf("reading target OS config file %s: %w", targetOsConfigFile, err)
+	}
+
+	// Validate the target OS configuration before parsing
+	if err := ValidateOsConfigYAML(data); err != nil {
+		return nil, fmt.Errorf("target OS config validation failed for %s: %w", targetOsConfigFile, err)
+	}
+
 	targetOsConfigs, err := file.ReadFromYaml(targetOsConfigFile)
 	if err != nil {
 		log.Errorf("Failed to read target OS config file: %v", err)
@@ -324,8 +341,31 @@ func ValidateChrootenvYAML(data []byte) error {
 // ValidateChrootenvJSON validates a chrootenv JSON configuration
 func ValidateChrootenvJSON(data []byte) error {
 	return validate.ValidateAgainstSchema(
-		"chrootenv-config.schema.json",
+		chrootenvSchemaName,
 		schema.ChrootenvSchema,
+		data,
+		"",
+	)
+}
+
+// ValidateOsConfigYAML validates an OS config YAML file against the schema
+func ValidateOsConfigYAML(data []byte) error {
+	var raw interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("invalid YAML format: %w", err)
+	}
+	jsonData, err := json.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("os config validation error: unable to process config: %w", err)
+	}
+	return ValidateOsConfigJSON(jsonData)
+}
+
+// ValidateOsConfigJSON validates an OS config JSON configuration
+func ValidateOsConfigJSON(data []byte) error {
+	return validate.ValidateAgainstSchema(
+		osConfigSchemaName,
+		schema.OsConfigSchema,
 		data,
 		"",
 	)

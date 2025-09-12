@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "os-config.schema.json",
+  "title": "OS Configuration Schema",
+  "description": "Schema for validating Azure Linux OS configuration files (config.yml)",
+  "type": "object",
+  "patternProperties": {
+    "^(x86_64|aarch64|armv7hl)$": {
+      "type": "object",
+      "description": "Architecture-specific configuration",
+      "properties": {
+        "dist": {
+          "type": "string",
+          "description": "Distribution identifier",
+          "enum": ["azl3", "emt3", "elxr12", "aria"]
+        },
+        "arch": {
+          "type": "string",
+          "description": "Target architecture - must match the property key",
+          "enum": ["x86_64", "aarch64", "armv7hl"]
+        },
+        "pkgType": {
+          "type": "string",
+          "description": "Package management system type",
+          "enum": ["rpm", "deb"]
+        },
+        "chrootenvConfigFile": {
+          "type": "string",
+          "description": "Relative path to the chrootenv configuration file",
+          "pattern": "^chrootenvconfigs/chrootenv_[a-zA-Z0-9_]+\\.yml$",
+          "examples": [
+            "chrootenvconfigs/chrootenv_x86_64.yml",
+            "chrootenvconfigs/chrootenv_aarch64.yml"
+          ]
+        },
+        "releaseVersion": {
+          "type": "string",
+          "description": "Release version of the distribution",
+          "pattern": "^\\d+\\.\\d+(?:\\.\\d+){0,2}$",
+          "examples": ["3.0", "12.0"]
+        }
+      },
+      "required": ["dist", "arch", "pkgType", "chrootenvConfigFile", "releaseVersion"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "minProperties": 1,
+  "allOf": [
+    {
+      "description": "Ensure architecture key matches arch property value",
+      "if": {
+        "properties": {
+          "x86_64": {
+            "type": "object"
+          }
+        },
+        "required": ["x86_64"]
+      },
+      "then": {
+        "properties": {
+          "x86_64": {
+            "properties": {
+              "arch": {
+                "const": "x86_64"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Ensure architecture key matches arch property value",
+      "if": {
+        "properties": {
+          "aarch64": {
+            "type": "object"
+          }
+        },
+        "required": ["aarch64"]
+      },
+      "then": {
+        "properties": {
+          "aarch64": {
+            "properties": {
+              "arch": {
+                "const": "aarch64"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Ensure architecture key matches arch property value",
+      "if": {
+        "properties": {
+          "armv7hl": {
+            "type": "object"
+          }
+        },
+        "required": ["armv7hl"]
+      },
+      "then": {
+        "properties": {
+          "armv7hl": {
+            "properties": {
+              "arch": {
+                "const": "armv7hl"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Distribution compatibility validation",
+      "allOf": [
+        {
+          "if": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "dist": {
+                    "const": "azl3"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "pkgType": {
+                    "const": "rpm"
+                  },
+                  "releaseVersion": {
+                    "const": "3.0"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "dist": {
+                    "const": "emt3"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "pkgType": {
+                    "const": "rpm"
+                  },
+                  "releaseVersion": {
+                    "const": "3.0"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "dist": {
+                    "const": "elxr12"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "patternProperties": {
+              "^(x86_64|aarch64|armv7hl)$": {
+                "properties": {
+                  "pkgType": {
+                    "const": "deb"
+                  },
+                  "releaseVersion": {
+                    "const": "12.0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "x86_64": {
+        "dist": "azl3",
+        "arch": "x86_64",
+        "pkgType": "rpm",
+        "chrootenvConfigFile": "chrootenvconfigs/chrootenv_x86_64.yml",
+        "releaseVersion": "3.0"
+      },
+      "aarch64": {
+        "dist": "azl3",
+        "arch": "aarch64",
+        "pkgType": "rpm",
+        "chrootenvConfigFile": "chrootenvconfigs/chrootenv_aarch64.yml",
+        "releaseVersion": "3.0"
+      }
+    }
+  ]
+}

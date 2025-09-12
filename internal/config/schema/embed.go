@@ -12,3 +12,8 @@ var ConfigSchema []byte
 //
 //go:embed chrootenv-config.schema.json
 var ChrootenvSchema []byte
+
+// OsConfigSchema contains the JSON schema for validating OS configuration files
+//
+//go:embed os-config.schema.json
+var OsConfigSchema []byte

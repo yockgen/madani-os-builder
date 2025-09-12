@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	imageSchemaName  = "os-image-template.schema.json"
-	configSchemaName = "os-image-composer-config.schema.json"
-	userRef          = "#/$defs/UserTemplate"
-	fullRef          = "#/$defs/FullTemplate"
+	imageSchemaName     = "os-image-template.schema.json"
+	configSchemaName    = "os-image-composer-config.schema.json"
+	chrootenvSchemaName = "chrootenv-config.schema.json"
+	osConfigSchemaName  = "os-config.schema.json"
+	userRef             = "#/$defs/UserTemplate"
+	fullRef             = "#/$defs/FullTemplate"
 )
 
 var log = logger.Logger()
