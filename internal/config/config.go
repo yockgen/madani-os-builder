@@ -103,8 +103,10 @@ type AdditionalFileInfo struct {
 
 // KernelConfig holds the kernel configuration
 type KernelConfig struct {
-	Version string `yaml:"version"`
-	Cmdline string `yaml:"cmdline"`
+	Version  string   `yaml:"version"`
+	Cmdline  string   `yaml:"cmdline"`
+	Packages []string `yaml:"packages"`
+	UKI      bool     `yaml:"uki,omitempty"`
 }
 
 // PartitionInfo holds information about a partition in the disk layout
@@ -255,6 +257,10 @@ func (t *ImageTemplate) GetPackages() []string {
 // GetKernel returns the kernel configuration from the system configuration
 func (t *ImageTemplate) GetKernel() KernelConfig {
 	return t.SystemConfig.Kernel
+}
+
+func (t *ImageTemplate) GetKernelPackages() []string {
+	return t.SystemConfig.Kernel.Packages
 }
 
 // GetSystemConfigName returns the name of the system configuration
