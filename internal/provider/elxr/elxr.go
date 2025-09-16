@@ -33,27 +33,15 @@ type eLxr struct {
 	repoCfg   debutils.RepoConfig
 	gzHref    string
 	chrootEnv chroot.ChrootEnvInterface
-	rawMaker  rawmaker.RawMakerInterface
-	isoMaker  isomaker.IsoMakerInterface
 }
 
 func Register(targetOs, targetDist, targetArch string) error {
 	chrootEnv, err := chroot.NewChrootEnv(targetOs, targetDist, targetArch)
 	if err != nil {
-		return fmt.Errorf("failed to inject chroot dependency: %w", err)
-	}
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
-	if err != nil {
-		return fmt.Errorf("failed to inject raw image maker dependency: %w", err)
-	}
-	isoMaker, err := isomaker.NewIsoMaker(chrootEnv)
-	if err != nil {
-		return fmt.Errorf("failed to inject ISO image maker dependency: %w", err)
+		return fmt.Errorf("failed to create chroot environment: %w", err)
 	}
 	provider.Register(&eLxr{
 		chrootEnv: chrootEnv,
-		rawMaker:  rawMaker,
-		isoMaker:  isoMaker,
 	}, targetDist, targetArch)
 
 	return nil
@@ -104,23 +92,52 @@ func (p *eLxr) PreProcess(template *config.ImageTemplate) error {
 	return nil
 }
 
-func (p *eLxr) BuildImage(template *config.ImageTemplate) error {
-	if template.Target.ImageType == "iso" {
-		if err := p.isoMaker.Init(template); err != nil {
-			return fmt.Errorf("failed to initialize ISO image maker: %w", err)
-		}
-		if err := p.isoMaker.BuildIsoImage(template); err != nil {
-			return fmt.Errorf("failed to build ISO image: %w", err)
-		}
-	} else {
-		if err := p.rawMaker.Init(template); err != nil {
-			return fmt.Errorf("failed to initialize raw image maker: %w", err)
-		}
-		if err := p.rawMaker.BuildRawImage(template); err != nil {
-			return fmt.Errorf("failed to build raw image: %w", err)
-		}
+func (elxr *eLxr) BuildImage(template *config.ImageTemplate) error {
+	if template == nil {
+		return fmt.Errorf("template cannot be nil")
 	}
-	return nil
+
+	log.Infof("Building image: %s", template.GetImageName())
+
+	// Create makers with template when needed
+	switch template.Target.ImageType {
+	case "raw":
+		return elxr.buildRawImage(template)
+	case "iso":
+		return elxr.buildIsoImage(template)
+	default:
+		return fmt.Errorf("unsupported image type: %s", template.Target.ImageType)
+	}
+}
+
+func (elxr *eLxr) buildRawImage(template *config.ImageTemplate) error {
+	// Create RawMaker with template (dependency injection)
+	rawMaker, err := rawmaker.NewRawMaker(elxr.chrootEnv, template)
+	if err != nil {
+		return fmt.Errorf("failed to create raw maker: %w", err)
+	}
+
+	// Use the maker
+	if err := rawMaker.Init(); err != nil {
+		return fmt.Errorf("failed to initialize raw maker: %w", err)
+	}
+
+	return rawMaker.BuildRawImage()
+}
+
+func (elxr *eLxr) buildIsoImage(template *config.ImageTemplate) error {
+	// Create IsoMaker with template (dependency injection)
+	isoMaker, err := isomaker.NewIsoMaker(elxr.chrootEnv, template)
+	if err != nil {
+		return fmt.Errorf("failed to create iso maker: %w", err)
+	}
+
+	// Use the maker
+	if err := isoMaker.Init(); err != nil {
+		return fmt.Errorf("failed to initialize iso maker: %w", err)
+	}
+
+	return isoMaker.BuildIsoImage()
 }
 
 func (p *eLxr) PostProcess(template *config.ImageTemplate, err error) error {

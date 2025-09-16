@@ -20,11 +20,12 @@ import (
 )
 
 type IsoMakerInterface interface {
-	Init(template *config.ImageTemplate) error
-	BuildIsoImage(template *config.ImageTemplate) error
+	Init() error          // Initialize with stored template
+	BuildIsoImage() error // Build ISO image using stored template
 }
 
 type IsoMaker struct {
+	template      *config.ImageTemplate
 	ImageBuildDir string
 	ChrootEnv     chroot.ChrootEnvInterface
 	ImageOs       imageos.ImageOsInterface
@@ -32,41 +33,59 @@ type IsoMaker struct {
 
 var log = logger.Logger()
 
-func NewIsoMaker(chrootEnv chroot.ChrootEnvInterface) (*IsoMaker, error) {
+func NewIsoMaker(chrootEnv chroot.ChrootEnvInterface, template *config.ImageTemplate) (*IsoMaker, error) {
+	// Add nil checking
+	if template == nil {
+		return nil, fmt.Errorf("image template cannot be nil")
+	}
+	if chrootEnv == nil {
+		return nil, fmt.Errorf("chroot environment cannot be nil")
+	}
+
+	// Create ImageOs with template
+	imageOs, err := imageos.NewImageOs(chrootEnv, template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create image OS: %w", err)
+	}
+
 	return &IsoMaker{
+		template:  template,
 		ChrootEnv: chrootEnv,
+		ImageOs:   imageOs,
 	}, nil
 }
 
-func (isoMaker *IsoMaker) Init(template *config.ImageTemplate) error {
-	imageOs, err := imageos.NewImageOs(isoMaker.ChrootEnv, template)
-	if err != nil {
-		return fmt.Errorf("failed to create image OS instance: %w", err)
-	}
-	isoMaker.ImageOs = imageOs
-
+func (isoMaker *IsoMaker) Init() error {
 	globalWorkDir, err := config.WorkDir()
 	if err != nil {
 		return fmt.Errorf("failed to get global work directory: %w", err)
 	}
 
-	providerId := system.GetProviderId(template.Target.OS, template.Target.Dist,
-		template.Target.Arch)
+	providerId := system.GetProviderId(
+		isoMaker.template.Target.OS,
+		isoMaker.template.Target.Dist,
+		isoMaker.template.Target.Arch,
+	)
+
 	isoMaker.ImageBuildDir = filepath.Join(globalWorkDir, providerId, "imagebuild")
+
+	// Create the image build directory
 	if err := os.MkdirAll(isoMaker.ImageBuildDir, 0700); err != nil {
 		log.Errorf("Failed to create imagebuild directory %s: %v", isoMaker.ImageBuildDir, err)
-		return fmt.Errorf("failed to create imagebuild directory: %w", err)
+		return fmt.Errorf("failed to create image build directory %s: %w", isoMaker.ImageBuildDir, err)
 	}
 
+	log.Infof("Initialized ISO maker with build directory: %s", isoMaker.ImageBuildDir)
 	return nil
 }
 
-func (isoMaker *IsoMaker) BuildIsoImage(template *config.ImageTemplate) error {
+func (isoMaker *IsoMaker) BuildIsoImage() error {
+	log.Infof("Building ISO image for: %s", isoMaker.template.GetImageName())
 
-	log.Infof("Building ISO image for: %s", template.GetImageName())
+	// Get system config name from stored template
+	sysConfigName := isoMaker.template.GetSystemConfigName()
 
-	sysConfigName := template.GetSystemConfigName()
-
+	// Create initrd file directory
 	initrdFileDir := filepath.Join(isoMaker.ImageBuildDir, sysConfigName)
 	if _, err := os.Stat(initrdFileDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(initrdFileDir, 0700); err != nil {
@@ -76,39 +95,36 @@ func (isoMaker *IsoMaker) BuildIsoImage(template *config.ImageTemplate) error {
 	}
 
 	log.Infof("Creating ISO Initrd image...")
-	initrdRootfsPath, initrdFilePath, versionInfo, err := isoMaker.buildIsoInitrd(template, initrdFileDir)
+	initrdRootfsPath, initrdFilePath, versionInfo, err := isoMaker.buildIsoInitrd(initrdFileDir)
 	if err != nil {
 		return fmt.Errorf("failed to build ISO initrd: %w", err)
 	}
 
-	ImageName := fmt.Sprintf("%s-%s", template.GetImageName(), versionInfo)
-	isoFilePath := filepath.Join(isoMaker.ImageBuildDir, sysConfigName, fmt.Sprintf("%s.iso", ImageName))
+	imageName := fmt.Sprintf("%s-%s", isoMaker.template.GetImageName(), versionInfo)
+	isoFilePath := filepath.Join(isoMaker.ImageBuildDir, sysConfigName, fmt.Sprintf("%s.iso", imageName))
 
 	log.Infof("Creating ISO image...")
-	if err := isoMaker.createIso(template, initrdRootfsPath, initrdFilePath, isoFilePath); err != nil {
+	if err := isoMaker.createIso(initrdRootfsPath, initrdFilePath, isoFilePath); err != nil {
 		return fmt.Errorf("failed to create ISO image: %w", err)
 	}
+
+	log.Infof("ISO image build completed successfully: %s", isoFilePath)
 	return nil
 }
 
-func (isoMaker *IsoMaker) buildIsoInitrd(template *config.ImageTemplate, initrdFileDir string) (string, string, string, error) {
-	initrdTemplate, err := getInitrdTemplate(template)
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to get initrd template: %w", err)
-	}
-	if err := isoMaker.downloadInitrdPkgs(initrdTemplate); err != nil {
-		return "", "", "", fmt.Errorf("failed to download initrd packages: %w", err)
-	}
+func (isoMaker *IsoMaker) buildIsoInitrd(initrdFileDir string) (string, string, string, error) {
+	log.Infof("Building ISO initrd for image: %s", isoMaker.template.GetImageName())
 
-	isoMaker.ImageOs, err = imageos.NewImageOs(isoMaker.ChrootEnv, initrdTemplate)
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to create image OS instance: %w", err)
+	if err := isoMaker.downloadInitrdPkgs(); err != nil {
+		return "", "", "", fmt.Errorf("failed to download initrd packages: %w", err)
 	}
 
 	initrdRootfsPath, versionInfo, err := isoMaker.ImageOs.InstallInitrd()
 	if err != nil {
 		return initrdRootfsPath, "", versionInfo, fmt.Errorf("failed to install initrd: %w", err)
 	}
+
+	log.Infof("Initrd installation completed, version: %s", versionInfo)
 
 	if err := addInitScriptsToInitrd(initrdRootfsPath); err != nil {
 		return initrdRootfsPath, "", versionInfo, fmt.Errorf("failed to add init scripts to initrd: %w", err)
@@ -118,48 +134,64 @@ func (isoMaker *IsoMaker) buildIsoInitrd(template *config.ImageTemplate, initrdF
 	if err != nil {
 		return initrdRootfsPath, "", versionInfo, fmt.Errorf("failed to create initrd image: %w", err)
 	}
+
+	log.Infof("ISO initrd build completed: %s", initrdFilePath)
 	return initrdRootfsPath, initrdFilePath, versionInfo, nil
 }
 
-func getInitrdTemplate(template *config.ImageTemplate) (*config.ImageTemplate, error) {
-	targetOsConfigDir, err := config.GetTargetOsConfigDir(template.Target.OS, template.Target.Dist)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get target OS config directory: %w", err)
-	}
-	initrdTemplateFile := filepath.Join(targetOsConfigDir, "imageconfigs", "defaultconfigs",
-		"default-iso-initrd-"+template.Target.Arch+".yml")
-	if _, err := os.Stat(initrdTemplateFile); os.IsNotExist(err) {
-		log.Errorf("Initrd template file does not exist: %s", initrdTemplateFile)
-		return nil, fmt.Errorf("initrd template file does not exist: %s", initrdTemplateFile)
-	}
-	// The initrd template does not conform to the full image schema
-	initrdTemplate, err := config.LoadTemplate(initrdTemplateFile, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load initrd template: %w", err)
-	}
-	return initrdTemplate, nil
-}
+func (isoMaker *IsoMaker) downloadInitrdPkgs() error {
+	imageName := isoMaker.template.GetImageName()
+	log.Infof("Downloading packages for initrd image: %s", imageName)
 
-func (isoMaker *IsoMaker) downloadInitrdPkgs(initrdTemplate *config.ImageTemplate) error {
-	log.Infof("Downloading packages for: %s", initrdTemplate.GetImageName())
+	// Get package list from stored template
+	pkgList := isoMaker.template.GetPackages()
+	if len(pkgList) == 0 {
+		log.Warnf("No packages specified for initrd image: %s", imageName)
+		return nil
+	}
 
-	pkgList := initrdTemplate.GetPackages()
+	log.Infof("Downloading %d packages for initrd", len(pkgList))
+
+	// Get package type and cache directory
 	pkgType := isoMaker.ChrootEnv.GetTargetOsPkgType()
-	if pkgType == "deb" {
-		_, err := debutils.DownloadPackages(pkgList, isoMaker.ChrootEnv.GetChrootPkgCacheDir(), "")
+	cacheDir := isoMaker.ChrootEnv.GetChrootPkgCacheDir()
+
+	log.Infof("Using package type: %s, cache directory: %s", pkgType, cacheDir)
+
+	// Download packages based on type
+	switch pkgType {
+	case "deb":
+		log.Infof("Downloading DEB packages...")
+		_, err := debutils.DownloadPackages(pkgList, cacheDir, "")
 		if err != nil {
-			return fmt.Errorf("failed to download initrd packages: %w", err)
+			log.Errorf("Failed to download DEB packages: %v", err)
+			return fmt.Errorf("failed to download initrd DEB packages: %w", err)
 		}
-	} else if pkgType == "rpm" {
-		_, err := rpmutils.DownloadPackages(pkgList, isoMaker.ChrootEnv.GetChrootPkgCacheDir(), "")
+		log.Infof("DEB packages downloaded successfully")
+
+	case "rpm":
+		log.Infof("Downloading RPM packages...")
+		_, err := rpmutils.DownloadPackages(pkgList, cacheDir, "")
 		if err != nil {
-			return fmt.Errorf("failed to download initrd packages: %w", err)
+			log.Errorf("Failed to download RPM packages: %v", err)
+			return fmt.Errorf("failed to download initrd RPM packages: %w", err)
 		}
+		log.Infof("RPM packages downloaded successfully")
+
+	default:
+		return fmt.Errorf("unsupported package type: %s", pkgType)
 	}
 
-	if err := isoMaker.ChrootEnv.RefreshLocalCacheRepo(initrdTemplate.Target.Arch); err != nil {
+	// Refresh local cache repository
+	targetArch := isoMaker.template.Target.Arch
+	log.Infof("Refreshing local cache repository for architecture: %s", targetArch)
+
+	if err := isoMaker.ChrootEnv.RefreshLocalCacheRepo(targetArch); err != nil {
+		log.Errorf("Failed to refresh local cache repository: %v", err)
 		return fmt.Errorf("failed to refresh local cache repository: %w", err)
 	}
+
+	log.Infof("Package download and cache refresh completed successfully for initrd image: %s", imageName)
 	return nil
 }
 
@@ -196,23 +228,21 @@ func createInitrdImg(initrdRootfsPath, versionInfo, initrdFileDir string) (strin
 	return initrdFilePath, nil
 }
 
-func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfsPath, initrdFilePath, isoFilePath string) error {
-	var err error
-	isoMaker.ImageOs, err = imageos.NewImageOs(isoMaker.ChrootEnv, template)
-	if err != nil {
-		return fmt.Errorf("failed to create image OS instance: %w", err)
-	}
+func (isoMaker *IsoMaker) createIso(initrdRootfsPath, initrdFilePath, isoFilePath string) error {
 	installRoot := isoMaker.ImageOs.GetInstallRoot()
 
-	imageName := template.GetImageName()
+	imageName := isoMaker.template.GetImageName()
 	isoLabel := sanitizeIsoLabel(imageName)
+
+	log.Infof("Creating ISO image: %s", isoFilePath)
 
 	// Get the config file path to the static ISO root files
 	generalConfigDir, err := config.GetGeneralConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get general config directory: %w", err)
 	}
-	staticIsoRootFilesDir := filepath.Join(generalConfigDir, "isolinux", template.Target.Arch)
+
+	staticIsoRootFilesDir := filepath.Join(generalConfigDir, "isolinux", isoMaker.template.Target.Arch)
 	if _, err := os.Stat(staticIsoRootFilesDir); os.IsNotExist(err) {
 		log.Errorf("Static ISO root files directory does not exist: %s", staticIsoRootFilesDir)
 		return fmt.Errorf("static ISO root files directory does not exist: %s", staticIsoRootFilesDir)
@@ -229,6 +259,7 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 		isoIsolinuxPath,
 	}
 
+	log.Infof("Creating ISO directory structure...")
 	for _, dir := range dirs {
 		if _, err := shell.ExecCmd("mkdir -p "+dir, true, "", nil); err != nil {
 			log.Errorf("Failed to create directory %s: %v", dir, err)
@@ -237,6 +268,7 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 	}
 
 	// Copy ISOLINUX files
+	log.Infof("Copying static files to isolinux path...")
 	if err := copyStaticFilesToIsolinuxPath(staticIsoRootFilesDir, isoIsolinuxPath); err != nil {
 		return fmt.Errorf("failed to copy static files to isolinux path: %w", err)
 	}
@@ -247,6 +279,7 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 	}
 
 	// Copy kernel and initrd
+	log.Infof("Copying kernel and initrd files...")
 	if err := copyKernelToIsoImagesPath(initrdRootfsPath, isoImagesPath); err != nil {
 		return fmt.Errorf("failed to copy kernel to isolinux path: %w", err)
 	}
@@ -256,6 +289,7 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 	}
 
 	// Copy EFI bootloader files
+	log.Infof("Copying EFI bootloader files...")
 	if err := isoMaker.copyEfiBootloaderFiles(initrdRootfsPath, isoEfiPath); err != nil {
 		return fmt.Errorf("failed to copy EFI bootloader files: %w", err)
 	}
@@ -265,15 +299,16 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 		return fmt.Errorf("failed to create GRUB configuration: %w", err)
 	}
 
+	// Handle package type specific logic
 	pkgType := isoMaker.ChrootEnv.GetTargetOsPkgType()
 	switch pkgType {
 	case "deb":
-		// Create standalone grub efi
-		if err := createGrubStandAlone(template, initrdRootfsPath, installRoot, isoEfiPath); err != nil {
+		if err := createGrubStandAlone(isoMaker.template, initrdRootfsPath, installRoot, isoEfiPath); err != nil {
 			return fmt.Errorf("failed to create standalone GRUB: %w", err)
 		}
 	}
 
+	log.Infof("Creating EFI FAT image...")
 	efiFatImgPath, err := createEfiFatImage(isoEfiPath, isoImagesPath)
 	if err != nil {
 		return fmt.Errorf("failed to create EFI FAT image: %w", err)
@@ -287,7 +322,8 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 		return fmt.Errorf("ISOLINUX MBR file does not exist: %s", mbrFilePath)
 	}
 
-	// Create ISO image
+	// Create ISO image with xorriso
+	log.Infof("Creating ISO image with xorriso...")
 	xorrisoCmd := fmt.Sprintf("xorriso -as mkisofs -isohybrid-mbr %s", mbrFilePath)
 	xorrisoCmd += " -c isolinux/boot.cat -b isolinux/isolinux.bin"
 	xorrisoCmd += " -no-emul-boot -boot-load-size 4 -boot-info-table"
@@ -301,6 +337,10 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 		return fmt.Errorf("failed to create ISO image: %w", err)
 	}
 
+	log.Infof("ISO image created successfully: %s", isoFilePath)
+
+	// Cleanup
+	log.Infof("Cleaning up temporary files...")
 	if err := cleanInitrd(initrdRootfsPath, initrdFilePath); err != nil {
 		return fmt.Errorf("failed to clean up initrd rootfs: %w", err)
 	}
@@ -309,6 +349,7 @@ func (isoMaker *IsoMaker) createIso(template *config.ImageTemplate, initrdRootfs
 		return fmt.Errorf("failed to clean up ISO install root: %w", err)
 	}
 
+	log.Infof("ISO creation completed successfully")
 	return nil
 }
 
