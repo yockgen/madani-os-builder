@@ -41,7 +41,6 @@ systemConfig: # Required
     provider: systemd-boot # (grub for efi and legacy mode, or systemd-boot for efi mode)
 
   packages:
-    - linux-image-amd64
     - ca-certificates
     - vim
     - sudo
@@ -72,3 +71,5 @@ systemConfig: # Required
 
   kernel:
     name: kernel
+    packages:
+     - linux-image-amd64

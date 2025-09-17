@@ -134,6 +134,10 @@ func (m *mockChrootEnv) AptInstallPackage(packageName, installRoot string, repoS
 	return nil
 }
 
+func (m *mockChrootEnv) UpdateSystemPkgs(template *config.ImageTemplate) error {
+	return nil
+}
+
 func TestNewIsoMaker(t *testing.T) {
 	tests := []struct {
 		name        string

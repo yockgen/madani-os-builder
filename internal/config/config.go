@@ -56,8 +56,10 @@ type ImageTemplate struct {
 	PackageRepositories []PackageRepository `yaml:"packageRepositories,omitempty"`
 
 	// Explicitly excluded from YAML serialization/deserialization
-	PathList    []string `yaml:"-"`
-	FullPkgList []string `yaml:"-"`
+	PathList          []string `yaml:"-"`
+	BootloaderPkgList []string `yaml:"-"`
+	KernelPkgList     []string `yaml:"-"`
+	FullPkgList       []string `yaml:"-"`
 }
 
 type Initramfs struct {
@@ -295,7 +297,11 @@ func (t *ImageTemplate) GetBootloaderConfig() Bootloader {
 
 // GetPackages returns all packages from the system configuration
 func (t *ImageTemplate) GetPackages() []string {
-	return t.SystemConfig.Packages
+	var allPkgList []string
+	allPkgList = append(allPkgList, t.KernelPkgList...)
+	allPkgList = append(allPkgList, t.SystemConfig.Packages...)
+	allPkgList = append(allPkgList, t.BootloaderPkgList...)
+	return allPkgList
 }
 
 func (t *ImageTemplate) GetAdditionalFileInfo() []AdditionalFileInfo {

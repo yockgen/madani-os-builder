@@ -194,6 +194,9 @@ func (p *Emt) installHostDependency() error {
 }
 
 func (p *Emt) downloadImagePkgs(template *config.ImageTemplate) error {
+	if err := p.chrootEnv.UpdateSystemPkgs(template); err != nil {
+		return fmt.Errorf("failed to update system packages: %w", err)
+	}
 	pkgList := template.GetPackages()
 	providerId := p.Name(template.Target.Dist, template.Target.Arch)
 	globalCache, err := config.CacheDir()

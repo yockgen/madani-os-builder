@@ -127,6 +127,10 @@ func (m *mockChrootEnv) AptInstallPackage(packageName, installRoot string, repoS
 	return m.err
 }
 
+func (m *mockChrootEnv) UpdateSystemPkgs(template *config.ImageTemplate) error {
+	return nil
+}
+
 type mockImageOs struct {
 	tempDir     string
 	installRoot string

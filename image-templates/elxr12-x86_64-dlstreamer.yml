@@ -25,6 +25,11 @@ packageRepositories:
     pkey: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C" # Uncomment and replace in real config
     component: "main universe"
 
+  - codename: "noble"
+    url: "https://download.01.org/intel-linux-overlay/ubuntu/"
+    pkey: "https://download.01.org/intel-linux-overlay/ubuntu/E6FA98203588250569758E97D176E3162086EE4C.gpg"
+    component: "kernels"
+
   # - codename: "ubuntu22"
   #   url: "https://apt.repos.intel.com/openvino/2025"
   #   pkey: "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB" # Uncomment and replace in real config
@@ -70,3 +75,9 @@ systemConfig:
 
   packages:
     - intel-dlstreamer
+
+  kernel:
+    version: "6.14"
+    packages:
+      - linux-image-6.14-intel
+      - linux-headers-6.14-intel

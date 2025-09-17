@@ -186,7 +186,10 @@ func (p *eLxr) installHostDependency() error {
 }
 
 func (p *eLxr) downloadImagePkgs(template *config.ImageTemplate) error {
-	pkgList := append(template.GetKernelPackages(), template.GetPackages()...)
+	if err := p.chrootEnv.UpdateSystemPkgs(template); err != nil {
+		return fmt.Errorf("failed to update system packages: %w", err)
+	}
+	pkgList := template.GetPackages()
 	providerId := p.Name(template.Target.Dist, template.Target.Arch)
 	globalCache, err := config.CacheDir()
 	if err != nil {

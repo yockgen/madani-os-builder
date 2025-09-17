@@ -402,6 +402,11 @@ func mergeKernelConfig(defaultKernel, userKernel KernelConfig) KernelConfig {
 	if userKernel.Cmdline != "" {
 		merged.Cmdline = userKernel.Cmdline
 	}
+
+	if len(userKernel.Packages) > 0 {
+		merged.Packages = userKernel.Packages
+	}
+
 	// Note: name and uki fields come from defaults and are preserved
 
 	return merged

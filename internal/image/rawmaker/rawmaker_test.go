@@ -107,6 +107,10 @@ func (m *mockChrootEnv) AptInstallPackage(packageName, installRoot string, repoS
 	return nil
 }
 
+func (m *mockChrootEnv) UpdateSystemPkgs(template *config.ImageTemplate) error {
+	return nil
+}
+
 type mockLoopDev struct {
 	shouldFailCreate bool
 	shouldFailDelete bool

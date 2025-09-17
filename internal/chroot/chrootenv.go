@@ -47,6 +47,7 @@ type ChrootEnvInterface interface {
 	CleanupChrootEnv(targetOs, targetDist, targetArch string) error
 	TdnfInstallPackage(packageName, installRoot string, repositoryIDList []string) error
 	AptInstallPackage(packageName, installRoot string, repoSrcList []string) error
+	UpdateSystemPkgs(template *config.ImageTemplate) error
 }
 
 type ChrootEnv struct {
@@ -453,6 +454,38 @@ func (chrootEnv *ChrootEnv) AptInstallPackage(packageName, installRoot string, r
 
 	if _, err := shell.ExecCmdWithStream(installCmd, true, installRoot, nil); err != nil {
 		return fmt.Errorf("failed to install package %s: %w", packageName, err)
+	}
+
+	return nil
+}
+
+func (chrootEnv *ChrootEnv) UpdateSystemPkgs(template *config.ImageTemplate) error {
+	// Update bootloader packages by bootloader type
+	bootloaderConfig := template.GetBootloaderConfig()
+	// To do: support bootloader package selection by bootloader type
+	switch bootloaderConfig.Provider {
+	case "grub":
+		if bootloaderConfig.BootType == "efi" {
+			template.BootloaderPkgList = []string{}
+		} else if bootloaderConfig.BootType == "legacy" {
+			template.BootloaderPkgList = []string{}
+		} else {
+			return fmt.Errorf("unsupported boot type: %s", bootloaderConfig.BootType)
+		}
+	case "systemd-boot":
+		template.BootloaderPkgList = []string{}
+	default:
+		return fmt.Errorf("unsupported bootloader provider: %s", bootloaderConfig.Provider)
+	}
+
+	// Update kernel packages by kernel version
+	kernelConfig := template.GetKernel()
+	if kernelConfig.Version == "" {
+		// Get the latest kernel version package by default
+		template.KernelPkgList = kernelConfig.Packages
+	} else {
+		// To do: search for exact kernel version package name
+		template.KernelPkgList = kernelConfig.Packages
 	}
 
 	return nil
