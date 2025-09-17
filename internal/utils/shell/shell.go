@@ -112,6 +112,7 @@ var commandMap = map[string]string{
 	"grub-mkstandalone":  "/usr/bin/grub-mkstandalone",
 	"sbsign":             "/usr/bin/sbsign",
 	"test":               "/bin/test",
+	"systemctl":          "/usr/bin/systemctl",
 	// Add more mappings as needed
 }
 

@@ -9,8 +9,8 @@ target:
   imageType: img # Image type, valid value: [raw, iso].
 
 systemConfig:
-  name: ISO_Initrd
-  description: Default yml configuration for iso initrd image
+  name: Default_Initrd
+  description: Default yml configuration for initrd image
 
   bootloader:
     bootType: efi # (efi or legacy)
@@ -39,6 +39,12 @@ systemConfig:
     - grub2
     - grub-pc-bin
     - grub-efi-amd64-bin
+
+  additionalFiles:
+    - local: ../additionalfiles/dhcp.network
+      final: /etc/systemd/network/dhcp.network
+    - local: ../additionalfiles/elxr-aria.list
+      final: /etc/apt/sources.list.d/elxr-aria.list
 
   kernel:
     name: kernel

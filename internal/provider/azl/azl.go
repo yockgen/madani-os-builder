@@ -11,6 +11,7 @@ import (
 
 	"github.com/open-edge-platform/image-composer/internal/chroot"
 	"github.com/open-edge-platform/image-composer/internal/config"
+	"github.com/open-edge-platform/image-composer/internal/image/initrdmaker"
 	"github.com/open-edge-platform/image-composer/internal/image/isomaker"
 	"github.com/open-edge-platform/image-composer/internal/image/rawmaker"
 	"github.com/open-edge-platform/image-composer/internal/ospackage/rpmutils"
@@ -40,7 +41,7 @@ type AzureLinux struct {
 func Register(targetOs, targetDist, targetArch string) error {
 	chrootEnv, err := chroot.NewChrootEnv(targetOs, targetDist, targetArch)
 	if err != nil {
-		return fmt.Errorf("failed to create chroot environment: %w", err)
+		return fmt.Errorf("failed to inject chroot dependency: %w", err)
 	}
 
 	provider.Register(&AzureLinux{
@@ -107,7 +108,7 @@ func (p *AzureLinux) PreProcess(template *config.ImageTemplate) error {
 	return nil
 }
 
-func (azl *AzureLinux) BuildImage(template *config.ImageTemplate) error {
+func (p *AzureLinux) BuildImage(template *config.ImageTemplate) error {
 	if template == nil {
 		return fmt.Errorf("template cannot be nil")
 	}
@@ -117,17 +118,19 @@ func (azl *AzureLinux) BuildImage(template *config.ImageTemplate) error {
 	// Create makers with template when needed
 	switch template.Target.ImageType {
 	case "raw":
-		return azl.buildRawImage(template)
+		return p.buildRawImage(template)
+	case "img":
+		return p.buildInitrdImage(template)
 	case "iso":
-		return azl.buildIsoImage(template)
+		return p.buildIsoImage(template)
 	default:
 		return fmt.Errorf("unsupported image type: %s", template.Target.ImageType)
 	}
 }
 
-func (azl *AzureLinux) buildRawImage(template *config.ImageTemplate) error {
+func (p *AzureLinux) buildRawImage(template *config.ImageTemplate) error {
 	// Create RawMaker with template (dependency injection)
-	rawMaker, err := rawmaker.NewRawMaker(azl.chrootEnv, template)
+	rawMaker, err := rawmaker.NewRawMaker(p.chrootEnv, template)
 	if err != nil {
 		return fmt.Errorf("failed to create raw maker: %w", err)
 	}
@@ -140,9 +143,30 @@ func (azl *AzureLinux) buildRawImage(template *config.ImageTemplate) error {
 	return rawMaker.BuildRawImage()
 }
 
-func (azl *AzureLinux) buildIsoImage(template *config.ImageTemplate) error {
+func (p *AzureLinux) buildInitrdImage(template *config.ImageTemplate) error {
+	// Create InitrdMaker with template (dependency injection)
+	initrdMaker, err := initrdmaker.NewInitrdMaker(p.chrootEnv, template)
+	if err != nil {
+                return fmt.Errorf("failed to create initrd maker: %w", err)
+        }
+
+	// Use the maker
+	if err := initrdMaker.Init(); err != nil {
+                return fmt.Errorf("failed to initialize initrd image maker: %w", err)
+        }
+        if err := initrdMaker.BuildInitrdImage(); err != nil {
+                return fmt.Errorf("failed to build initrd image: %w", err)
+        }
+        if err := initrdMaker.CleanInitrdRootfs(); err != nil {
+                return fmt.Errorf("failed to clean initrd rootfs: %w", err)
+        }
+
+	return nil
+}
+
+func (p *AzureLinux) buildIsoImage(template *config.ImageTemplate) error {
 	// Create IsoMaker with template (dependency injection)
-	isoMaker, err := isomaker.NewIsoMaker(azl.chrootEnv, template)
+	isoMaker, err := isomaker.NewIsoMaker(p.chrootEnv, template)
 	if err != nil {
 		return fmt.Errorf("failed to create iso maker: %w", err)
 	}

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/open-edge-platform/image-composer/internal/utils/slice"
 )
 
 // DefaultConfigLoader handles loading and merging default configurations
@@ -32,6 +34,8 @@ func (d *DefaultConfigLoader) LoadDefaultConfig(imageType string) (*ImageTemplat
 	switch imageType {
 	case "raw":
 		defaultConfigFile = fmt.Sprintf("default-raw-%s.yml", d.targetArch)
+	case "img":
+		defaultConfigFile = fmt.Sprintf("default-initrd-%s.yml", d.targetArch)
 	case "iso":
 		defaultConfigFile = fmt.Sprintf("default-iso-%s.yml", d.targetArch)
 	default:
@@ -85,6 +89,13 @@ func MergeConfigurations(userTemplate, defaultTemplate *ImageTemplate) (*ImageTe
 
 	// Start with a copy of the default template
 	mergedTemplate := *defaultTemplate
+
+	// Update the template path list
+	for _, path := range userTemplate.PathList {
+		if !slice.Contains(mergedTemplate.PathList, path) {
+			mergedTemplate.PathList = append(mergedTemplate.PathList, path)
+		}
+	}
 
 	// Override with user-specified values
 	// Image section - always use user values if provided
@@ -151,12 +162,20 @@ func mergeSystemConfig(defaultConfig, userConfig SystemConfig) SystemConfig {
 		merged.Description = userConfig.Description
 	}
 
+	if userConfig.Initramfs.Template != "" {
+		merged.Initramfs.Template = userConfig.Initramfs.Template
+	}
+
 	// Merge immutability config
 	merged.Immutability = mergeImmutabilityConfig(defaultConfig.Immutability, userConfig.Immutability)
 
 	// Merge users config
 	if len(userConfig.Users) > 0 {
 		merged.Users = mergeUsers(defaultConfig.Users, userConfig.Users)
+	}
+
+	if len(userConfig.AdditionalFiles) > 0 {
+		merged.AdditionalFiles = mergeAdditionalFiles(defaultConfig.AdditionalFiles, userConfig.AdditionalFiles)
 	}
 
 	// Merge bootloader config
@@ -200,6 +219,29 @@ func mergeImmutabilityConfig(defaultImmutability, userImmutability ImmutabilityC
 	}
 
 	return merged
+}
+
+func mergeAdditionalFiles(defaultFiles, userFiles []AdditionalFileInfo) []AdditionalFileInfo {
+	// Create a map to track unique additional files by their final path
+	fileMap := make(map[string]AdditionalFileInfo)
+
+	// Add default files first
+	for _, file := range defaultFiles {
+		fileMap[file.Final] = file
+	}
+
+	// Add/override with user files
+	for _, file := range userFiles {
+		fileMap[file.Final] = file
+	}
+
+	// Convert map back to slice
+	mergedFiles := make([]AdditionalFileInfo, 0, len(fileMap))
+	for _, file := range fileMap {
+		mergedFiles = append(mergedFiles, file)
+	}
+
+	return mergedFiles
 }
 
 // mergeUsers merges user configurations
