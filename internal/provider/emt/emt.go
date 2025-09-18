@@ -32,13 +32,10 @@ var log = logger.Logger()
 
 // Emt implements provider.Provider
 type Emt struct {
-	repoURL     string
-	repoCfg     rpmutils.RepoConfig
-	zstHref     string
-	chrootEnv   chroot.ChrootEnvInterface
-	rawMaker    rawmaker.RawMakerInterface
-	initrdMaker initrdmaker.InitrdMakerInterface
-	isoMaker    isomaker.IsoMakerInterface
+	repoURL   string
+	repoCfg   rpmutils.RepoConfig
+	zstHref   string
+	chrootEnv chroot.ChrootEnvInterface
 }
 
 func Register(targetOs, targetDist, targetArch string) error {
@@ -46,23 +43,9 @@ func Register(targetOs, targetDist, targetArch string) error {
 	if err != nil {
 		return fmt.Errorf("failed to inject chroot dependency: %w", err)
 	}
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
-	if err != nil {
-		return fmt.Errorf("failed to inject raw image maker dependency: %w", err)
-	}
-	initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
-	if err != nil {
-		return fmt.Errorf("failed to inject initrd image maker dependency: %w", err)
-	}
-	isoMaker, err := isomaker.NewIsoMaker(chrootEnv)
-	if err != nil {
-		return fmt.Errorf("failed to inject ISO image maker dependency: %w", err)
-	}
+
 	provider.Register(&Emt{
-		chrootEnv:   chrootEnv,
-		rawMaker:    rawMaker,
-		initrdMaker: initrdMaker,
-		isoMaker:    isoMaker,
+		chrootEnv: chrootEnv,
 	}, targetDist, targetArch)
 
 	return nil
@@ -124,35 +107,74 @@ func (p *Emt) PreProcess(template *config.ImageTemplate) error {
 }
 
 func (p *Emt) BuildImage(template *config.ImageTemplate) error {
+	if template == nil {
+		return fmt.Errorf("template cannot be nil")
+	}
+
+	log.Infof("Building image: %s", template.GetImageName())
+
+	// Create makers with template when needed
 	switch template.Target.ImageType {
 	case "raw":
-		if err := p.rawMaker.Init(template); err != nil {
-			return fmt.Errorf("failed to initialize raw image maker: %w", err)
-		}
-		if err := p.rawMaker.BuildRawImage(template); err != nil {
-			return fmt.Errorf("failed to build raw image: %w", err)
-		}
+		return p.buildRawImage(template)
 	case "img":
-		if err := p.initrdMaker.Init(template); err != nil {
-			return fmt.Errorf("failed to initialize initrd image maker: %w", err)
-		}
-		if err := p.initrdMaker.BuildInitrdImage(template); err != nil {
-			return fmt.Errorf("failed to build initrd image: %w", err)
-		}
-		if err := p.initrdMaker.CleanInitrdRootfs(); err != nil {
-			return fmt.Errorf("failed to clean initrd rootfs: %w", err)
-		}
+		return p.buildInitrdImage(template)
 	case "iso":
-		if err := p.isoMaker.Init(template); err != nil {
-			return fmt.Errorf("failed to initialize ISO image maker: %w", err)
-		}
-		if err := p.isoMaker.BuildIsoImage(template); err != nil {
-			return fmt.Errorf("failed to build ISO image: %w", err)
-		}
+		return p.buildIsoImage(template)
 	default:
 		return fmt.Errorf("unsupported image type: %s", template.Target.ImageType)
 	}
+}
+
+func (p *Emt) buildRawImage(template *config.ImageTemplate) error {
+	// Create RawMaker with template (dependency injection)
+	rawMaker, err := rawmaker.NewRawMaker(p.chrootEnv, template)
+	if err != nil {
+		return fmt.Errorf("failed to create raw maker: %w", err)
+	}
+
+	// Use the maker
+	if err := rawMaker.Init(); err != nil {
+		return fmt.Errorf("failed to initialize raw maker: %w", err)
+	}
+
+	return rawMaker.BuildRawImage()
+}
+
+func (p *Emt) buildInitrdImage(template *config.ImageTemplate) error {
+	// Create InitrdMaker with template (dependency injection)
+	initrdMaker, err := initrdmaker.NewInitrdMaker(p.chrootEnv, template)
+	if err != nil {
+		return fmt.Errorf("failed to create initrd maker: %w", err)
+	}
+
+	// Use the maker
+	if err := initrdMaker.Init(); err != nil {
+		return fmt.Errorf("failed to initialize initrd image maker: %w", err)
+	}
+	if err := initrdMaker.BuildInitrdImage(); err != nil {
+		return fmt.Errorf("failed to build initrd image: %w", err)
+	}
+	if err := initrdMaker.CleanInitrdRootfs(); err != nil {
+		return fmt.Errorf("failed to clean initrd rootfs: %w", err)
+	}
+
 	return nil
+}
+
+func (p *Emt) buildIsoImage(template *config.ImageTemplate) error {
+	// Create IsoMaker with template (dependency injection)
+	isoMaker, err := isomaker.NewIsoMaker(p.chrootEnv, template)
+	if err != nil {
+		return fmt.Errorf("failed to create iso maker: %w", err)
+	}
+
+	// Use the maker
+	if err := isoMaker.Init(); err != nil {
+		return fmt.Errorf("failed to initialize iso maker: %w", err)
+	}
+
+	return isoMaker.BuildIsoImage()
 }
 
 func (p *Emt) PostProcess(template *config.ImageTemplate, err error) error {

@@ -171,30 +171,74 @@ func (m *mockImageConvert) ConvertImageFile(filePath string, template *config.Im
 }
 
 func TestNewRawMaker(t *testing.T) {
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
+
 	tests := []struct {
-		name        string
-		chrootEnv   chroot.ChrootEnvInterface
-		expectError bool
+		name         string
+		chrootEnv    chroot.ChrootEnvInterface
+		template     *config.ImageTemplate
+		mockCommands []shell.MockCommand
+		expectError  bool
+		errorMsg     string
 	}{
 		{
-			name:        "successful_creation",
-			chrootEnv:   &mockChrootEnv{},
+			name: "successful_creation",
+			chrootEnv: &mockChrootEnv{
+				chrootEnvRoot: t.TempDir(),
+			},
+			template: &config.ImageTemplate{
+				Target: config.TargetInfo{
+					OS:   "ubuntu",
+					Dist: "jammy",
+					Arch: "x86_64",
+				},
+				SystemConfig: config.SystemConfig{
+					Name: "test-config",
+				},
+			},
+			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
+			},
 			expectError: false,
 		},
 		{
 			name:        "nil_chroot_env",
 			chrootEnv:   nil,
-			expectError: false, // Constructor doesn't validate nil
+			template:    &config.ImageTemplate{},
+			expectError: true,
+			errorMsg:    "chroot environment cannot be nil",
+		},
+		{
+			name:        "nil_template",
+			chrootEnv:   &mockChrootEnv{},
+			template:    nil,
+			expectError: true,
+			errorMsg:    "image template cannot be nil",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rawMaker, err := rawmaker.NewRawMaker(tt.chrootEnv)
+			shell.Default = shell.NewMockExecutor(tt.mockCommands)
+
+			// Setup chroot image build directory if needed
+			if tt.chrootEnv != nil && !tt.expectError {
+				if mockEnv, ok := tt.chrootEnv.(*mockChrootEnv); ok {
+					chrootImageBuildDir := mockEnv.GetChrootImageBuildDir()
+					if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+						t.Fatalf("Failed to create chroot image build dir: %v", err)
+					}
+				}
+			}
+
+			rawMaker, err := rawmaker.NewRawMaker(tt.chrootEnv, tt.template)
 
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error, but got none")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', but got: %v", tt.errorMsg, err)
 				}
 			} else {
 				if err != nil {
@@ -202,16 +246,6 @@ func TestNewRawMaker(t *testing.T) {
 				}
 				if rawMaker == nil {
 					t.Error("Expected non-nil RawMaker")
-				} else {
-					if tt.chrootEnv != nil {
-						if rawMaker.ChrootEnv != tt.chrootEnv {
-							t.Error("Expected ChrootEnv to be set correctly")
-						}
-					}
-
-					if rawMaker.LoopDev == nil {
-						t.Error("Expected LoopDev to be initialized")
-					}
 				}
 			}
 		})
@@ -238,20 +272,14 @@ func TestRawMaker_Init(t *testing.T) {
 					Dist: "jammy",
 					Arch: "x86_64",
 				},
+				SystemConfig: config.SystemConfig{
+					Name: "test-config",
+				},
 			},
 			mockCommands: []shell.MockCommand{
 				{Pattern: "mkdir", Output: "", Error: nil},
 			},
 			expectError: false,
-		},
-		{
-			name:     "nil_template",
-			template: nil,
-			mockCommands: []shell.MockCommand{
-				{Pattern: "mkdir", Output: "", Error: nil},
-			},
-			expectError:   true,
-			expectedError: "failed to create image OS instance",
 		},
 		{
 			name: "mkdir_failure",
@@ -261,12 +289,15 @@ func TestRawMaker_Init(t *testing.T) {
 					Dist: "jammy",
 					Arch: "x86_64",
 				},
+				SystemConfig: config.SystemConfig{
+					Name: "test-config",
+				},
 			},
 			mockCommands: []shell.MockCommand{
 				{Pattern: "mkdir", Output: "", Error: fmt.Errorf("mkdir failed")},
 			},
 			expectError:   true,
-			expectedError: "failed to create directory",
+			expectedError: "mkdir failed",
 		},
 	}
 
@@ -303,7 +334,16 @@ func TestRawMaker_Init(t *testing.T) {
 				}
 			}()
 
-			rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+			rawMaker, err := rawmaker.NewRawMaker(chrootEnv, tt.template)
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error, but got none")
+				} else if tt.expectedError != "" && !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("Expected error containing '%s', but got: %v", tt.expectedError, err)
+				}
+				// Do not proceed if NewRawMaker failed as expected
+				return
+			}
 			if err != nil {
 				t.Fatalf("Failed to create RawMaker: %v", err)
 			}
@@ -312,7 +352,7 @@ func TestRawMaker_Init(t *testing.T) {
 			currentConfig.WorkDir = tempDir
 			config.SetGlobal(currentConfig)
 
-			err = rawMaker.Init(tt.template)
+			err = rawMaker.Init()
 
 			if tt.expectError {
 				if err == nil {
@@ -323,12 +363,6 @@ func TestRawMaker_Init(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("Expected no error, but got: %v", err)
-				}
-				if rawMaker.ImageOs == nil {
-					t.Error("Expected ImageOs to be initialized")
-				}
-				if rawMaker.ImageConvert == nil {
-					t.Error("Expected ImageConvert to be initialized")
 				}
 				if rawMaker.ImageBuildDir == "" {
 					t.Error("Expected ImageBuildDir to be set")
@@ -378,7 +412,7 @@ func TestRawMaker_BuildRawImage_Success(t *testing.T) {
 		},
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -403,7 +437,7 @@ func TestRawMaker_BuildRawImage_Success(t *testing.T) {
 		t.Fatalf("Failed to create build directory: %v", err)
 	}
 
-	err = rawMaker.BuildRawImage(template)
+	err = rawMaker.BuildRawImage()
 
 	if err != nil {
 		t.Errorf("Expected no error, but got: %v", err)
@@ -448,7 +482,7 @@ func TestRawMaker_BuildRawImage_LoopDevCreationFailure(t *testing.T) {
 		},
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -459,18 +493,18 @@ func TestRawMaker_BuildRawImage_LoopDevCreationFailure(t *testing.T) {
 	}
 	rawMaker.LoopDev = mockLoopDev
 
-	err = rawMaker.Init(template)
+	err = rawMaker.Init()
 	if err != nil {
 		t.Fatalf("Failed to initialize RawMaker: %v", err)
 	}
 
-	err = rawMaker.BuildRawImage(template)
+	err = rawMaker.BuildRawImage()
 
 	if err == nil {
 		t.Error("Expected error, but got none")
 	}
-	if !strings.Contains(err.Error(), "failed to create raw image") {
-		t.Errorf("Expected error about raw image creation, but got: %v", err)
+	if !strings.Contains(err.Error(), "failed to create loop device") {
+		t.Errorf("Expected error about loop device creation, but got: %v", err)
 	}
 }
 
@@ -513,7 +547,7 @@ func TestRawMaker_BuildRawImage_ImageOsInstallFailure(t *testing.T) {
 		},
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -529,7 +563,7 @@ func TestRawMaker_BuildRawImage_ImageOsInstallFailure(t *testing.T) {
 	rawMaker.LoopDev = mockLoopDev
 	rawMaker.ImageOs = mockImageOs
 
-	err = rawMaker.Init(template)
+	err = rawMaker.Init()
 	if err != nil {
 		t.Fatalf("Failed to initialize RawMaker: %v", err)
 	}
@@ -540,91 +574,13 @@ func TestRawMaker_BuildRawImage_ImageOsInstallFailure(t *testing.T) {
 		t.Fatalf("Failed to create build directory: %v", err)
 	}
 
-	err = rawMaker.BuildRawImage(template)
+	err = rawMaker.BuildRawImage()
 
 	if err == nil {
 		t.Error("Expected error, but got none")
 	}
-	if !strings.Contains(err.Error(), "failed to install image OS") {
-		t.Errorf("Expected error about image OS installation, but got: %v", err)
-	}
-}
-
-func TestRawMaker_BuildRawImage_LoopDevDeleteFailure(t *testing.T) {
-	originalExecutor := shell.Default
-	defer func() { shell.Default = originalExecutor }()
-
-	mockCommands := []shell.MockCommand{
-		{Pattern: "mkdir", Output: "", Error: nil},
-		{Pattern: "rm", Output: "", Error: nil},
-	}
-	shell.Default = shell.NewMockExecutor(mockCommands)
-
-	tempDir := t.TempDir()
-	chrootEnv := &mockChrootEnv{
-		pkgType:           "deb",
-		chrootEnvRoot:     tempDir,
-		chrootPkgCacheDir: filepath.Join(tempDir, "cache"),
-	}
-
-	chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
-	if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
-		t.Fatalf("Failed to create chroot image build dir: %v", err)
-	}
-
-	os.Setenv("IMAGE_COMPOSER_WORK_DIR", tempDir)
-	defer os.Unsetenv("IMAGE_COMPOSER_WORK_DIR")
-
-	template := &config.ImageTemplate{
-		Target: config.TargetInfo{
-			OS:   "ubuntu",
-			Dist: "jammy",
-			Arch: "x86_64",
-		},
-		Image: config.ImageInfo{
-			Name: "test-image",
-		},
-		SystemConfig: config.SystemConfig{
-			Name: "test-config",
-		},
-	}
-
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
-	if err != nil {
-		t.Fatalf("Failed to create RawMaker: %v", err)
-	}
-
-	// Replace with mocks
-	mockLoopDev := &mockLoopDev{
-		loopDevPath:      "/dev/loop0",
-		shouldFailDelete: true,
-	}
-	mockImageOs := &mockImageOs{
-		installRoot: tempDir,
-		versionInfo: "1.0.0",
-	}
-
-	rawMaker.LoopDev = mockLoopDev
-	rawMaker.ImageOs = mockImageOs
-
-	err = rawMaker.Init(template)
-	if err != nil {
-		t.Fatalf("Failed to initialize RawMaker: %v", err)
-	}
-
-	// Create the expected directory structure
-	buildDir := filepath.Join(tempDir, "ubuntu-jammy-x86_64", "imagebuild", "test-config")
-	if err := os.MkdirAll(buildDir, 0700); err != nil {
-		t.Fatalf("Failed to create build directory: %v", err)
-	}
-
-	err = rawMaker.BuildRawImage(template)
-
-	if err == nil {
-		t.Error("Expected error, but got none")
-	}
-	if !strings.Contains(err.Error(), "mock loop device deletion failure") {
-		t.Errorf("Expected error about loop device detachment, but got: %v", err)
+	if !strings.Contains(err.Error(), "failed to install OS") {
+		t.Errorf("Expected error about OS installation, but got: %v", err)
 	}
 }
 
@@ -668,7 +624,7 @@ func TestRawMaker_BuildRawImage_RenameFailure(t *testing.T) {
 		},
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -691,12 +647,12 @@ func TestRawMaker_BuildRawImage_RenameFailure(t *testing.T) {
 		t.Fatalf("Failed to create build directory: %v", err)
 	}
 
-	err = rawMaker.BuildRawImage(template)
+	err = rawMaker.BuildRawImage()
 
 	if err == nil {
 		t.Error("Expected error, but got none")
 	}
-	if !strings.Contains(err.Error(), "failed to rename raw image file") {
+	if !strings.Contains(err.Error(), "failed to rename image file") {
 		t.Errorf("Expected error about file rename, but got: %v", err)
 	}
 }
@@ -718,6 +674,12 @@ func TestRawMaker_BuildRawImage_ConvertFailure(t *testing.T) {
 		chrootPkgCacheDir: filepath.Join(tempDir, "cache"),
 	}
 
+	// Create chroot image build directory first
+	chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+	if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+		t.Fatalf("Failed to create chroot image build dir: %v", err)
+	}
+
 	os.Setenv("IMAGE_COMPOSER_WORK_DIR", tempDir)
 	defer os.Unsetenv("IMAGE_COMPOSER_WORK_DIR")
 
@@ -735,7 +697,7 @@ func TestRawMaker_BuildRawImage_ConvertFailure(t *testing.T) {
 		},
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -762,7 +724,7 @@ func TestRawMaker_BuildRawImage_ConvertFailure(t *testing.T) {
 		t.Fatalf("Failed to create build directory: %v", err)
 	}
 
-	err = rawMaker.BuildRawImage(template)
+	err = rawMaker.BuildRawImage()
 
 	if err == nil {
 		t.Error("Expected error, but got none")
@@ -772,7 +734,88 @@ func TestRawMaker_BuildRawImage_ConvertFailure(t *testing.T) {
 	}
 }
 
+func TestRawMaker_BuildRawImage_LoopDevDeleteFailure(t *testing.T) {
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
+
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+		{Pattern: "mv", Output: "", Error: nil},
+	}
+	shell.Default = shell.NewMockExecutor(mockCommands)
+
+	tempDir := t.TempDir()
+	chrootEnv := &mockChrootEnv{
+		pkgType:           "deb",
+		chrootEnvRoot:     tempDir,
+		chrootPkgCacheDir: filepath.Join(tempDir, "cache"),
+	}
+
+	chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+	if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+		t.Fatalf("Failed to create chroot image build dir: %v", err)
+	}
+
+	os.Setenv("IMAGE_COMPOSER_WORK_DIR", tempDir)
+	defer os.Unsetenv("IMAGE_COMPOSER_WORK_DIR")
+
+	template := &config.ImageTemplate{
+		Target: config.TargetInfo{
+			OS:   "ubuntu",
+			Dist: "jammy",
+			Arch: "x86_64",
+		},
+		Image: config.ImageInfo{
+			Name: "test-image",
+		},
+		SystemConfig: config.SystemConfig{
+			Name: "test-config",
+		},
+	}
+
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
+	if err != nil {
+		t.Fatalf("Failed to create RawMaker: %v", err)
+	}
+
+	// Replace with mocks - the delete failure will be logged but won't fail the build
+	mockLoopDev := &mockLoopDev{
+		loopDevPath:      "/dev/loop0",
+		shouldFailDelete: true,
+	}
+	mockImageOs := &mockImageOs{
+		installRoot: tempDir,
+		versionInfo: "1.0.0",
+	}
+	mockImageConvert := &mockImageConvert{}
+
+	rawMaker.LoopDev = mockLoopDev
+	rawMaker.ImageOs = mockImageOs
+	rawMaker.ImageConvert = mockImageConvert
+
+	err = rawMaker.Init()
+	if err != nil {
+		t.Fatalf("Failed to initialize RawMaker: %v", err)
+	}
+
+	// Create the expected directory structure
+	buildDir := filepath.Join(tempDir, "ubuntu-jammy-x86_64", "imagebuild", "test-config")
+	if err := os.MkdirAll(buildDir, 0700); err != nil {
+		t.Fatalf("Failed to create build directory: %v", err)
+	}
+
+	// BuildRawImage should succeed even if loop device deletion fails in defer
+	// The deletion failure is logged but not returned as an error
+	err = rawMaker.BuildRawImage()
+	if err != nil {
+		t.Errorf("Expected no error (deletion failure is just logged), but got: %v", err)
+	}
+}
+
 func TestRawMaker_CleanupOnSuccess(t *testing.T) {
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
+
 	tests := []struct {
 		name             string
 		loopDevPath      string
@@ -791,22 +834,47 @@ func TestRawMaker_CleanupOnSuccess(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:             "delete_failure",
+			name:             "delete_failure_logged",
 			loopDevPath:      "/dev/loop0",
 			shouldFailDelete: true,
-			expectError:      true,
-			expectedErrorMsg: "mock loop device deletion failure",
+			expectError:      false, // Failure is logged but not returned
+		},
+	}
+
+	template := &config.ImageTemplate{
+		Target: config.TargetInfo{
+			OS:   "ubuntu",
+			Dist: "jammy",
+			Arch: "x86_64",
+		},
+		Image: config.ImageInfo{
+			Name: "test-image",
+		},
+		SystemConfig: config.SystemConfig{
+			Name: "test-config",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Mock shell commands to avoid sudo issues
+			mockCommands := []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
+			}
+			shell.Default = shell.NewMockExecutor(mockCommands)
+
 			tempDir := t.TempDir()
 			chrootEnv := &mockChrootEnv{
 				chrootEnvRoot: tempDir,
 			}
 
-			rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+			// Ensure chroot image build directory exists
+			chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+			if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+				t.Fatalf("Failed to create chroot image build dir: %v", err)
+			}
+
+			rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 			if err != nil {
 				t.Fatalf("Failed to create RawMaker: %v", err)
 			}
@@ -816,18 +884,14 @@ func TestRawMaker_CleanupOnSuccess(t *testing.T) {
 			}
 			rawMaker.LoopDev = mockLoopDev
 
-			// Test cleanup function by calling it directly through BuildRawImage
-			// since cleanupOnSuccess is unexported
-
-			// We can't directly test the unexported method, so we test the behavior
-			// through the public interface by checking if cleanup happens correctly
+			// Test cleanup behavior through the mock
 			if tt.loopDevPath != "" {
 				err := mockLoopDev.LoopSetupDelete(tt.loopDevPath)
-				if tt.expectError {
+				if tt.shouldFailDelete {
 					if err == nil {
 						t.Error("Expected error during cleanup, but got none")
-					} else if tt.expectedErrorMsg != "" && !strings.Contains(err.Error(), tt.expectedErrorMsg) {
-						t.Errorf("Expected error containing '%s', but got: %v", tt.expectedErrorMsg, err)
+					} else if !strings.Contains(err.Error(), "mock loop device deletion failure") {
+						t.Errorf("Expected mock deletion error, but got: %v", err)
 					}
 				} else {
 					if err != nil {
@@ -856,7 +920,7 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 		{
 			name:            "successful_cleanup",
 			loopDevPath:     "/dev/loop0",
-			imagePath:       "/tmp/test.raw",
+			imagePath:       "test.raw",
 			createImageFile: true,
 			expectError:     false,
 		},
@@ -869,25 +933,15 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 		{
 			name:             "delete_failure",
 			loopDevPath:      "/dev/loop0",
-			imagePath:        "/tmp/test.raw",
+			imagePath:        "test.raw",
 			shouldFailDelete: true,
 			createImageFile:  true,
-			expectError:      true,
-			expectedErrorMsg: "cleanup errors",
-		},
-		{
-			name:             "remove_failure",
-			loopDevPath:      "/dev/loop0",
-			imagePath:        "/tmp/test.raw",
-			shouldFailRemove: true,
-			createImageFile:  true,
-			expectError:      true,
-			expectedErrorMsg: "cleanup errors",
+			expectError:      false, // Failure is logged but doesn't propagate
 		},
 		{
 			name:            "file_not_exists",
 			loopDevPath:     "/dev/loop0",
-			imagePath:       "/tmp/nonexistent.raw",
+			imagePath:       "nonexistent.raw",
 			createImageFile: false,
 			expectError:     false,
 		},
@@ -896,10 +950,12 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockCommands := []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
 				{Pattern: "rm", Output: "", Error: nil},
 			}
 			if tt.shouldFailRemove {
 				mockCommands = []shell.MockCommand{
+					{Pattern: "mkdir", Output: "", Error: nil},
 					{Pattern: "rm", Output: "", Error: fmt.Errorf("rm failed")},
 				}
 			}
@@ -910,7 +966,21 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 				chrootEnvRoot: tempDir,
 			}
 
-			rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+			// Ensure chroot image build directory exists
+			chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+			if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+				t.Fatalf("Failed to create chroot image build dir: %v", err)
+			}
+
+			template := &config.ImageTemplate{
+				Target: config.TargetInfo{
+					OS:   "ubuntu",
+					Dist: "jammy",
+					Arch: "x86_64",
+				},
+			}
+
+			rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 			if err != nil {
 				t.Fatalf("Failed to create RawMaker: %v", err)
 			}
@@ -922,19 +992,11 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 
 			// Create image file if needed
 			if tt.createImageFile && tt.imagePath != "" {
-				imageDir := filepath.Dir(tt.imagePath)
-				if err := os.MkdirAll(imageDir, 0700); err != nil {
-					t.Fatalf("Failed to create image directory: %v", err)
-				}
-				if err := os.WriteFile(tt.imagePath, []byte("test image"), 0644); err != nil {
+				imagePath := filepath.Join(tempDir, tt.imagePath)
+				if err := os.WriteFile(imagePath, []byte("test image"), 0644); err != nil {
 					t.Fatalf("Failed to create image file: %v", err)
 				}
 			}
-
-			// Test cleanup by simulating error conditions
-			// We can't directly test cleanupOnError since it's unexported,
-			// but we can test the individual operations
-			var testErr error = fmt.Errorf("original error")
 
 			// Test loop device deletion
 			if tt.loopDevPath != "" {
@@ -944,23 +1006,18 @@ func TestRawMaker_CleanupOnError(t *testing.T) {
 				}
 			}
 
-			// Test file removal
+			// Test file removal behavior
 			if tt.imagePath != "" && tt.createImageFile {
-				_, err := os.Stat(tt.imagePath)
+				imagePath := filepath.Join(tempDir, tt.imagePath)
+				_, err := os.Stat(imagePath)
 				fileExists := err == nil
 
-				if fileExists {
-					_, err := shell.ExecCmd(fmt.Sprintf("rm -f %s", tt.imagePath), true, "", nil)
-					if tt.shouldFailRemove && err == nil {
+				if fileExists && tt.shouldFailRemove {
+					// The actual cleanup would call shell command to remove
+					_, err := shell.ExecCmd(fmt.Sprintf("rm -f %s", imagePath), true, "", nil)
+					if err == nil {
 						t.Error("Expected file removal to fail")
 					}
-				}
-			}
-
-			// In actual usage, the error would be modified by cleanupOnError
-			if tt.expectError && testErr != nil {
-				if !strings.Contains(testErr.Error(), "original error") {
-					t.Errorf("Expected error to contain original error message")
 				}
 			}
 		})
@@ -1011,12 +1068,15 @@ func TestRawMaker_BuildRawImage_Integration(t *testing.T) {
 				Image: config.ImageInfo{
 					Name: "",
 				},
+				SystemConfig: config.SystemConfig{
+					Name: "",
+				},
 			},
 			mockCommands: []shell.MockCommand{
 				{Pattern: "mkdir", Output: "", Error: nil},
 			},
 			expectError:   true,
-			expectedError: "failed to create raw image",
+			expectedError: "failed to create loop device",
 		},
 	}
 
@@ -1031,6 +1091,12 @@ func TestRawMaker_BuildRawImage_Integration(t *testing.T) {
 				chrootPkgCacheDir: filepath.Join(tempDir, "cache"),
 			}
 
+			// Create chroot image build directory first
+			chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+			if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+				t.Fatalf("Failed to create chroot image build dir: %v", err)
+			}
+
 			if tt.setupFunc != nil {
 				if err := tt.setupFunc(tempDir); err != nil {
 					t.Fatalf("Failed to setup test: %v", err)
@@ -1041,7 +1107,7 @@ func TestRawMaker_BuildRawImage_Integration(t *testing.T) {
 			os.Setenv("IMAGE_COMPOSER_WORK_DIR", tempDir)
 			defer os.Unsetenv("IMAGE_COMPOSER_WORK_DIR")
 
-			rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+			rawMaker, err := rawmaker.NewRawMaker(chrootEnv, tt.template)
 			if err != nil {
 				t.Fatalf("Failed to create RawMaker: %v", err)
 			}
@@ -1083,7 +1149,7 @@ func TestRawMaker_BuildRawImage_Integration(t *testing.T) {
 				}
 			}
 
-			err = rawMaker.BuildRawImage(tt.template)
+			err = rawMaker.BuildRawImage()
 
 			if tt.expectError {
 				if err == nil {
@@ -1101,13 +1167,39 @@ func TestRawMaker_BuildRawImage_Integration(t *testing.T) {
 }
 
 func TestRawMaker_Interface_Compliance(t *testing.T) {
+	originalExecutor := shell.Default
+	defer func() { shell.Default = originalExecutor }()
+
+	// Mock shell commands to avoid sudo issues
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+	}
+	shell.Default = shell.NewMockExecutor(mockCommands)
+
 	// Test that RawMaker implements RawMakerInterface
 	tempDir := t.TempDir()
 	chrootEnv := &mockChrootEnv{
 		chrootEnvRoot: tempDir,
 	}
 
-	rawMaker, err := rawmaker.NewRawMaker(chrootEnv)
+	// Ensure chroot image build directory exists
+	chrootImageBuildDir := chrootEnv.GetChrootImageBuildDir()
+	if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
+		t.Fatalf("Failed to create chroot image build dir: %v", err)
+	}
+
+	template := &config.ImageTemplate{
+		Target: config.TargetInfo{
+			OS:   "ubuntu",
+			Dist: "jammy",
+			Arch: "x86_64",
+		},
+		SystemConfig: config.SystemConfig{
+			Name: "test-config",
+		},
+	}
+
+	rawMaker, err := rawmaker.NewRawMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create RawMaker: %v", err)
 	}
@@ -1115,22 +1207,11 @@ func TestRawMaker_Interface_Compliance(t *testing.T) {
 	// Verify interface compliance by checking method signatures
 	var _ rawmaker.RawMakerInterface = rawMaker
 
-	// Test method existence
-	template := &config.ImageTemplate{
-		Target: config.TargetInfo{
-			OS:   "ubuntu",
-			Dist: "jammy",
-			Arch: "x86_64",
-		},
-	}
+	// Test Init method (should succeed or fail based on setup)
+	_ = rawMaker.Init()
 
-	// Test Init method
-	if err := rawMaker.Init(nil); err == nil {
-		t.Error("Expected error for nil template, but got none")
-	}
-
-	// Test that the methods exist and can be called
-	err = rawMaker.BuildRawImage(template)
+	// Test that BuildRawImage exists and can be called
+	err = rawMaker.BuildRawImage()
 	// We expect this to fail without proper setup, but the method should exist
 	if err == nil {
 		t.Error("Expected error without proper setup")

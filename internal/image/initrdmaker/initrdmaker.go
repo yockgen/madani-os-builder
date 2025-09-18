@@ -18,9 +18,9 @@ import (
 )
 
 type InitrdMakerInterface interface {
-	Init(template *config.ImageTemplate) error
-	DownloadInitrdPkgs(template *config.ImageTemplate) error
-	BuildInitrdImage(template *config.ImageTemplate) error
+	Init() error
+	DownloadInitrdPkgs() error
+	BuildInitrdImage() error
 	GetInitrdVersion() string
 	GetInitrdFilePath() string
 	GetInitrdRootfsPath() string
@@ -28,6 +28,7 @@ type InitrdMakerInterface interface {
 }
 
 type InitrdMaker struct {
+	template         *config.ImageTemplate
 	ImageBuildDir    string
 	InitrdRootfsPath string
 	InitrdFilePath   string
@@ -38,33 +39,49 @@ type InitrdMaker struct {
 
 var log = logger.Logger()
 
-func NewInitrdMaker(chrootEnv chroot.ChrootEnvInterface) (*InitrdMaker, error) {
+func NewInitrdMaker(chrootEnv chroot.ChrootEnvInterface, template *config.ImageTemplate) (*InitrdMaker, error) {
+	// nil checking is done one in constructor only to avoid repetitive checks
+	// in every method and schema check is done during template load making
+	// sure internal structure is valid
+	if template == nil {
+		return nil, fmt.Errorf("image template cannot be nil")
+	}
+	if chrootEnv == nil {
+		return nil, fmt.Errorf("chroot environment cannot be nil")
+	}
+
+	imageOs, err := imageos.NewImageOs(chrootEnv, template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create image OS: %w", err)
+	}
+
 	return &InitrdMaker{
+		template:  template, // Store template
 		ChrootEnv: chrootEnv,
+		ImageOs:   imageOs, // Already template-aware
 	}, nil
 }
 
-func (initrdMaker *InitrdMaker) Init(template *config.ImageTemplate) error {
-	imageOs, err := imageos.NewImageOs(initrdMaker.ChrootEnv, template)
-	if err != nil {
-		return fmt.Errorf("failed to create image OS instance: %w", err)
-	}
-	initrdMaker.ImageOs = imageOs
-
+func (initrdMaker *InitrdMaker) Init() error {
 	globalWorkDir, err := config.WorkDir()
 	if err != nil {
 		return fmt.Errorf("failed to get global work directory: %w", err)
 	}
 
-	providerId := system.GetProviderId(template.Target.OS, template.Target.Dist,
-		template.Target.Arch)
-	initrdMaker.ImageBuildDir = filepath.Join(globalWorkDir, providerId, "imagebuild")
-	if err := os.MkdirAll(initrdMaker.ImageBuildDir, 0700); err != nil {
-		log.Errorf("Failed to create imagebuild directory %s: %v", initrdMaker.ImageBuildDir, err)
-		return fmt.Errorf("failed to create imagebuild directory: %w", err)
-	}
+	providerId := system.GetProviderId(
+		initrdMaker.template.Target.OS,
+		initrdMaker.template.Target.Dist,
+		initrdMaker.template.Target.Arch,
+	)
 
-	return nil
+	initrdMaker.ImageBuildDir = filepath.Join(
+		globalWorkDir,
+		providerId,
+		"imagebuild",
+		initrdMaker.template.SystemConfig.Name,
+	)
+
+	return os.MkdirAll(initrdMaker.ImageBuildDir, 0700)
 }
 
 func (initrdMaker *InitrdMaker) GetInitrdVersion() string {
@@ -79,14 +96,14 @@ func (initrdMaker *InitrdMaker) GetInitrdRootfsPath() string {
 	return initrdMaker.InitrdRootfsPath
 }
 
-func (initrdMaker *InitrdMaker) DownloadInitrdPkgs(template *config.ImageTemplate) error {
-	log.Infof("Downloading packages for: %s", template.GetImageName())
+func (initrdMaker *InitrdMaker) DownloadInitrdPkgs() error {
+	log.Infof("Downloading packages for: %s", initrdMaker.template.GetImageName())
 
-	if err := initrdMaker.ChrootEnv.UpdateSystemPkgs(template); err != nil {
+	if err := initrdMaker.ChrootEnv.UpdateSystemPkgs(initrdMaker.template); err != nil {
 		return fmt.Errorf("failed to update system packages: %w", err)
 	}
 
-	pkgList := template.GetPackages()
+	pkgList := initrdMaker.template.GetPackages()
 	pkgType := initrdMaker.ChrootEnv.GetTargetOsPkgType()
 	if pkgType == "deb" {
 		_, err := debutils.DownloadPackages(pkgList, initrdMaker.ChrootEnv.GetChrootPkgCacheDir(), "")
@@ -100,17 +117,17 @@ func (initrdMaker *InitrdMaker) DownloadInitrdPkgs(template *config.ImageTemplat
 		}
 	}
 
-	if err := initrdMaker.ChrootEnv.RefreshLocalCacheRepo(template.Target.Arch); err != nil {
+	if err := initrdMaker.ChrootEnv.RefreshLocalCacheRepo(initrdMaker.template.Target.Arch); err != nil {
 		return fmt.Errorf("failed to refresh local cache repository: %w", err)
 	}
 	return nil
 }
 
-func (initrdMaker *InitrdMaker) BuildInitrdImage(template *config.ImageTemplate) (err error) {
-	log.Infof("Building initrd image for: %s", template.GetImageName())
+func (initrdMaker *InitrdMaker) BuildInitrdImage() (err error) {
+	log.Infof("Building initrd image for: %s", initrdMaker.template.GetImageName())
 
-	imageName := template.GetImageName()
-	sysConfigName := template.GetSystemConfigName()
+	imageName := initrdMaker.template.GetImageName()
+	sysConfigName := initrdMaker.template.GetSystemConfigName()
 
 	initrdMaker.InitrdRootfsPath, initrdMaker.VersionInfo, err = initrdMaker.ImageOs.InstallInitrd()
 	if err != nil {

@@ -17,11 +17,12 @@ import (
 )
 
 type RawMakerInterface interface {
-	Init(template *config.ImageTemplate) error
-	BuildRawImage(template *config.ImageTemplate) error
+	Init() error          // Initialize with stored template
+	BuildRawImage() error // Build raw image using stored template
 }
 
 type RawMaker struct {
+	template      *config.ImageTemplate
 	ImageBuildDir string
 	ChrootEnv     chroot.ChrootEnvInterface
 	LoopDev       imagedisc.LoopDevInterface
@@ -31,109 +32,142 @@ type RawMaker struct {
 
 var log = logger.Logger()
 
-func NewRawMaker(chrootEnv chroot.ChrootEnvInterface) (*RawMaker, error) {
+func NewRawMaker(chrootEnv chroot.ChrootEnvInterface, template *config.ImageTemplate) (*RawMaker, error) {
+	// nil checking is done one in constructor only to avoid repetitive checks
+	// in every method and schema check is done during template load making
+	// sure internal structure is valid
+	if template == nil {
+		return nil, fmt.Errorf("image template cannot be nil")
+	}
+	if chrootEnv == nil {
+		return nil, fmt.Errorf("chroot environment cannot be nil")
+	}
+
+	// Create ImageOs with template
+	imageOs, err := imageos.NewImageOs(chrootEnv, template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create image OS: %w", err)
+	}
+
 	return &RawMaker{
-		ChrootEnv: chrootEnv,
-		LoopDev:   imagedisc.NewLoopDev(),
+		template:     template, // Store template
+		ChrootEnv:    chrootEnv,
+		LoopDev:      imagedisc.NewLoopDev(),
+		ImageOs:      imageOs, // Already template-aware
+		ImageConvert: imageconvert.NewImageConvert(),
 	}, nil
 }
 
-func (rawMaker *RawMaker) Init(template *config.ImageTemplate) error {
-	imageOs, err := imageos.NewImageOs(rawMaker.ChrootEnv, template)
-	if err != nil {
-		return fmt.Errorf("failed to create image OS instance: %w", err)
-	}
-	rawMaker.ImageOs = imageOs
-
-	imageConvert := imageconvert.NewImageConvert()
-	rawMaker.ImageConvert = imageConvert
-
+func (rawMaker *RawMaker) Init() error {
 	globalWorkDir, err := config.WorkDir()
 	if err != nil {
-		return fmt.Errorf("failed to get global work directory: %w", err)
+		return fmt.Errorf("failed to get work directory: %w", err)
 	}
 
-	providerId := system.GetProviderId(template.Target.OS, template.Target.Dist,
-		template.Target.Arch)
-	rawMaker.ImageBuildDir = filepath.Join(globalWorkDir, providerId, "imagebuild")
-	if err := os.MkdirAll(rawMaker.ImageBuildDir, 0700); err != nil {
-		log.Errorf("Failed to create imagebuild directory %s: %v", rawMaker.ImageBuildDir, err)
-		return fmt.Errorf("failed to create imagebuild directory: %w", err)
-	}
+	providerId := system.GetProviderId(
+		rawMaker.template.Target.OS,
+		rawMaker.template.Target.Dist,
+		rawMaker.template.Target.Arch,
+	)
 
-	return nil
+	rawMaker.ImageBuildDir = filepath.Join(
+		globalWorkDir,
+		providerId,
+		"imagebuild",
+		rawMaker.template.SystemConfig.Name,
+	)
+
+	return os.MkdirAll(rawMaker.ImageBuildDir, 0700)
 }
 
-func (rawMaker *RawMaker) cleanupOnSuccess(loopDevPath string, err *error) {
-	if loopDevPath != "" {
-		if detachErr := rawMaker.LoopDev.LoopSetupDelete(loopDevPath); detachErr != nil {
-			log.Errorf("Failed to detach loopback device: %v", detachErr)
-			*err = fmt.Errorf("failed to detach loopback device: %w", detachErr)
-		}
+// Helper method for image file cleanup
+func (rawMaker *RawMaker) cleanupImageFileOnError(imagePath string) {
+	if imagePath == "" {
+		return
 	}
-}
 
-func (rawMaker *RawMaker) cleanupOnError(loopDevPath, imagePath string, err *error) {
-	if loopDevPath != "" {
-		detachErr := rawMaker.LoopDev.LoopSetupDelete(loopDevPath)
-		if detachErr != nil {
-			log.Errorf("Failed to detach loopback device after error: %v", detachErr)
-			*err = fmt.Errorf("operation failed: %w, cleanup errors: %v", *err, detachErr)
-			return
-		}
-	}
 	if _, statErr := os.Stat(imagePath); statErr == nil {
+		log.Warnf("Cleaning up image file due to error: %s", imagePath)
 		if _, rmErr := shell.ExecCmd(fmt.Sprintf("rm -f %s", imagePath), true, "", nil); rmErr != nil {
-			log.Errorf("Failed to remove raw image file %s after error: %v", imagePath, rmErr)
-			*err = fmt.Errorf("operation failed: %w, cleanup errors: %v", *err, rmErr)
+			log.Errorf("Failed to remove image file %s during cleanup: %v", imagePath, rmErr)
+		} else {
+			log.Infof("Successfully cleaned up image file: %s", imagePath)
 		}
 	}
 }
 
-func (rawMaker *RawMaker) BuildRawImage(template *config.ImageTemplate) (err error) {
-	var versionInfo string
-	var newFilePath string
+// Helper method for file renaming
+func (rawMaker *RawMaker) renameImageFile(currentPath, imageName, versionInfo string) (string, error) {
+	sysConfigName := rawMaker.template.SystemConfig.Name
 
-	log.Infof("Building raw image for: %s", template.GetImageName())
-	imageName := template.GetImageName()
-	sysConfigName := template.GetSystemConfigName()
-	filePath := filepath.Join(rawMaker.ImageBuildDir, sysConfigName, fmt.Sprintf("%s.raw", imageName))
-
-	log.Infof("Creating raw image disk...")
-	loopDevPath, diskPathIdMap, err := rawMaker.LoopDev.CreateRawImageLoopDev(filePath, template)
-	if err != nil {
-		return fmt.Errorf("failed to create raw image: %w", err)
+	// Create target directory
+	targetDir := filepath.Join(rawMaker.ImageBuildDir, sysConfigName)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create target directory %s: %w", targetDir, err)
 	}
 
+	// Construct new file path
+	newFilePath := filepath.Join(targetDir, fmt.Sprintf("%s-%s.raw", imageName, versionInfo))
+
+	log.Infof("Renaming image file from %s to %s", currentPath, newFilePath)
+
+	// Move file
+	if _, err := shell.ExecCmd(fmt.Sprintf("mv %s %s", currentPath, newFilePath), true, "", nil); err != nil {
+		return "", fmt.Errorf("failed to move file from %s to %s: %w", currentPath, newFilePath, err)
+	}
+
+	return newFilePath, nil
+}
+
+func (rawMaker *RawMaker) BuildRawImage() error {
+	imageName := rawMaker.template.GetImageName()
+	imageFile := filepath.Join(rawMaker.ImageBuildDir, imageName+".raw")
+
+	log.Infof("Creating raw image file: %s", imageFile)
+
+	// Create loop device
+	loopDevPath, diskPathIdMap, err := rawMaker.LoopDev.CreateRawImageLoopDev(imageFile, rawMaker.template)
+	if err != nil {
+		return fmt.Errorf("failed to create loop device: %w", err)
+	}
+
+	// Setup cleanup for loop device (always needed)
 	defer func() {
-		if err != nil {
-			rawMaker.cleanupOnError(loopDevPath, filePath, &err)
-		} else {
-			rawMaker.cleanupOnSuccess(loopDevPath, &err)
+		if loopDevPath != "" {
+			if detachErr := rawMaker.LoopDev.LoopSetupDelete(loopDevPath); detachErr != nil {
+				log.Errorf("Failed to detach loopback device %s: %v", loopDevPath, detachErr)
+			} else {
+				log.Infof("Successfully detached loopback device: %s", loopDevPath)
+			}
 		}
 	}()
 
-	versionInfo, err = rawMaker.ImageOs.InstallImageOs(diskPathIdMap)
+	log.Infof("Created loop device: %s", loopDevPath)
+
+	// Install OS
+	versionInfo, err := rawMaker.ImageOs.InstallImageOs(diskPathIdMap)
 	if err != nil {
-		return fmt.Errorf("failed to install image OS: %w", err)
+		// Loop device will be cleaned up by defer
+		// Image file cleanup handled separately if needed
+		rawMaker.cleanupImageFileOnError(imageFile)
+		return fmt.Errorf("failed to install OS: %w", err)
 	}
 
-	err = rawMaker.LoopDev.LoopSetupDelete(loopDevPath)
-	loopDevPath = ""
+	log.Infof("OS installation completed with version: %s", versionInfo)
+
+	// File renaming
+	finalImagePath, err := rawMaker.renameImageFile(imageFile, imageName, versionInfo)
 	if err != nil {
-		return fmt.Errorf("failed to detach loopback device: %w", err)
+		rawMaker.cleanupImageFileOnError(imageFile)
+		return fmt.Errorf("failed to rename image file: %w", err)
 	}
 
-	newFilePath = filepath.Join(rawMaker.ImageBuildDir, sysConfigName, fmt.Sprintf("%s-%s.raw", imageName, versionInfo))
-	if _, err := shell.ExecCmd(fmt.Sprintf("mv %s %s", filePath, newFilePath), true, "", nil); err != nil {
-		log.Errorf("Failed to rename raw image file: %v", err)
-		return fmt.Errorf("failed to rename raw image file: %w", err)
-	}
-	filePath = newFilePath
-
-	err = rawMaker.ImageConvert.ConvertImageFile(filePath, template)
-	if err != nil {
+	// Image conversion
+	if err := rawMaker.ImageConvert.ConvertImageFile(finalImagePath, rawMaker.template); err != nil {
+		rawMaker.cleanupImageFileOnError(finalImagePath)
 		return fmt.Errorf("failed to convert image file: %w", err)
 	}
+
+	log.Infof("Raw image build completed successfully: %s", finalImagePath)
 	return nil
 }

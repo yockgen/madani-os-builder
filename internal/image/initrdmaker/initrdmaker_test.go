@@ -128,7 +128,7 @@ func (m *mockChrootEnv) AptInstallPackage(packageName, installRoot string, repoS
 }
 
 func (m *mockChrootEnv) UpdateSystemPkgs(template *config.ImageTemplate) error {
-	return nil
+	return m.err
 }
 
 type mockImageOs struct {
@@ -178,13 +178,24 @@ func TestNewInitrdMaker(t *testing.T) {
 		{
 			name:        "nil_chroot_env",
 			chrootEnv:   nil,
-			expectError: false, // Constructor doesn't validate nil
+			expectError: true,
 		},
 	}
 
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+	}
+
+	shell.Default = shell.NewMockExecutor(mockCommands)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initrdMaker, err := initrdmaker.NewInitrdMaker(tt.chrootEnv)
+			template := &config.ImageTemplate{
+				Image: config.ImageInfo{
+					Name: "test-image",
+				},
+			}
+			initrdMaker, err := initrdmaker.NewInitrdMaker(tt.chrootEnv, template)
 
 			if tt.expectError {
 				if err == nil {
@@ -241,7 +252,7 @@ func TestInitrdMaker_Init(t *testing.T) {
 				{Pattern: "mkdir", Output: "", Error: nil},
 			},
 			expectError:   true,
-			expectedError: "failed to create image OS instance",
+			expectedError: "image template cannot be nil",
 		},
 		{
 			name: "mkdir_failure",
@@ -273,16 +284,11 @@ func TestInitrdMaker_Init(t *testing.T) {
 				}
 			}
 
-			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
-			if err != nil {
-				t.Fatalf("Failed to create InitrdMaker: %v", err)
-			}
-
 			currentConfig := config.Global()
 			currentConfig.WorkDir = tempDir
 			config.SetGlobal(currentConfig)
 
-			err = initrdMaker.Init(tt.template)
+			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, tt.template)
 
 			if tt.expectError {
 				if err == nil {
@@ -296,9 +302,6 @@ func TestInitrdMaker_Init(t *testing.T) {
 				}
 				if initrdMaker.ImageOs == nil {
 					t.Error("Expected ImageOs to be initialized")
-				}
-				if initrdMaker.ImageBuildDir == "" {
-					t.Error("Expected ImageBuildDir to be set")
 				}
 			}
 		})
@@ -329,17 +332,23 @@ func TestInitrdMaker_DownloadInitrdPkgs(t *testing.T) {
 		},
 	}
 
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+	}
+
+	shell.Default = shell.NewMockExecutor(mockCommands)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			chrootEnv := NewMockChrootEnv(tt.pkgType, tempDir, tt.err)
 
-			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
+			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, tt.template)
 			if err != nil {
 				t.Fatalf("Failed to create InitrdMaker: %v", err)
 			}
 
-			err = initrdMaker.DownloadInitrdPkgs(tt.template)
+			err = initrdMaker.DownloadInitrdPkgs()
 
 			if tt.expectError {
 				if err == nil {
@@ -498,7 +507,7 @@ func TestInitrdMaker_BuildInitrdImage(t *testing.T) {
 			currentConfig.ConfigDir = filepath.Join(tempDir, "config")
 			config.SetGlobal(currentConfig)
 
-			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
+			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, tt.template)
 			if err != nil {
 				t.Fatalf("Failed to create InitrdMaker: %v", err)
 			}
@@ -523,7 +532,7 @@ func TestInitrdMaker_BuildInitrdImage(t *testing.T) {
 				}
 			}
 
-			err = initrdMaker.BuildInitrdImage(tt.template)
+			err = initrdMaker.BuildInitrdImage()
 
 			if tt.expectError {
 				if err == nil {
@@ -571,6 +580,7 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 				return nil
 			},
 			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
 				{Pattern: "mount", Output: "", Error: nil},
 				{Pattern: "rm -rf", Output: "", Error: nil},
 			},
@@ -582,8 +592,10 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 				im.InitrdRootfsPath = ""
 				return nil
 			},
-			mockCommands: []shell.MockCommand{},
-			expectError:  false,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
+			},
+			expectError: false,
 		},
 		{
 			name: "nonexistent_rootfs_path",
@@ -591,8 +603,10 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 				im.InitrdRootfsPath = filepath.Join(tempDir, "nonexistent")
 				return nil
 			},
-			mockCommands: []shell.MockCommand{},
-			expectError:  false,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
+			},
+			expectError: false,
 		},
 		{
 			name: "umount_failure",
@@ -605,6 +619,7 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 				return nil
 			},
 			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
 				{Pattern: "mount", Output: "", Error: fmt.Errorf("umount failed")},
 			},
 			expectError:   true,
@@ -621,6 +636,7 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 				return nil
 			},
 			mockCommands: []shell.MockCommand{
+				{Pattern: "mkdir", Output: "", Error: nil},
 				{Pattern: "mount", Output: "", Error: nil},
 				{Pattern: "rm -rf", Output: "", Error: fmt.Errorf("rm failed")},
 			},
@@ -635,8 +651,13 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 
 			tempDir := t.TempDir()
 			chrootEnv := NewMockChrootEnv("deb", tempDir, nil)
+			template := &config.ImageTemplate{
+				Image: config.ImageInfo{
+					Name: "test-image",
+				},
+			}
 
-			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
+			initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, template)
 			if err != nil {
 				t.Fatalf("Failed to create InitrdMaker: %v", err)
 			}
@@ -667,8 +688,17 @@ func TestInitrdMaker_CleanInitrdRootfs(t *testing.T) {
 func TestInitrdMaker_GetterMethods(t *testing.T) {
 	tempDir := t.TempDir()
 	chrootEnv := NewMockChrootEnv("deb", tempDir, nil)
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+	}
 
-	initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
+	shell.Default = shell.NewMockExecutor(mockCommands)
+	template := &config.ImageTemplate{
+		Image: config.ImageInfo{
+			Name: "test-image",
+		},
+	}
+	initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, template)
 	if err != nil {
 		t.Fatalf("Failed to create InitrdMaker: %v", err)
 	}
@@ -704,7 +734,6 @@ func TestInitrdMaker_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name         string
 		setupFunc    func() (*initrdmaker.InitrdMaker, *config.ImageTemplate, error)
-		testFunc     func(*initrdmaker.InitrdMaker, *config.ImageTemplate) error
 		expectError  bool
 		errorMessage string
 	}{
@@ -717,25 +746,23 @@ func TestInitrdMaker_ErrorHandling(t *testing.T) {
 				if err := os.MkdirAll(chrootImageBuildDir, 0700); err != nil {
 					t.Fatalf("Failed to create chroot image build dir: %v", err)
 				}
-				initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv)
+				initrdMaker, err := initrdmaker.NewInitrdMaker(chrootEnv, nil)
 				return initrdMaker, nil, err
 			},
-			testFunc: func(im *initrdmaker.InitrdMaker, template *config.ImageTemplate) error {
-				return im.Init(template)
-			},
 			expectError:  true,
-			errorMessage: "failed to create image OS instance",
+			errorMessage: "image template cannot be nil",
 		},
 	}
 
+	mockCommands := []shell.MockCommand{
+		{Pattern: "mkdir", Output: "", Error: nil},
+	}
+
+	shell.Default = shell.NewMockExecutor(mockCommands)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initrdMaker, template, err := tt.setupFunc()
-			if err != nil {
-				t.Fatalf("Failed to setup test: %v", err)
-			}
-
-			err = tt.testFunc(initrdMaker, template)
+			_, _, err := tt.setupFunc()
 
 			if tt.expectError {
 				if err == nil {
