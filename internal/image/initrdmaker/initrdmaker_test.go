@@ -13,6 +13,33 @@ import (
 	"github.com/open-edge-platform/os-image-composer/internal/utils/shell"
 )
 
+// Custom mock executor that creates files when cpio commands are executed
+type CustomMockExecutorWithFileCreation struct {
+	*shell.MockExecutor
+	ImageBuildDir string
+}
+
+func (c *CustomMockExecutorWithFileCreation) ExecCmdWithStream(cmdStr string, sudo bool, chrootPath string, envVal []string) (string, error) {
+	// If this is a cpio command, create the expected output file
+	if strings.Contains(cmdStr, "cpio") && strings.Contains(cmdStr, "gzip") {
+		// Extract output file from command: "cd ... && sudo find . | sudo cpio -o -H newc | sudo gzip > /path/to/file"
+		parts := strings.Split(cmdStr, " > ")
+		if len(parts) > 1 {
+			outputFile := strings.TrimSpace(parts[1])
+			// Create the file to simulate successful cpio command
+			if err := os.MkdirAll(filepath.Dir(outputFile), 0700); err != nil {
+				return "", err
+			}
+			if err := os.WriteFile(outputFile, []byte("mock initrd content"), 0644); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	// Call the parent's ExecCmdWithStream
+	return c.MockExecutor.ExecCmdWithStream(cmdStr, sudo, chrootPath, envVal)
+}
+
 // Mock implementations for testing
 type mockChrootEnv struct {
 	pkgType             string
@@ -401,14 +428,6 @@ func TestInitrdMaker_BuildInitrdImage(t *testing.T) {
 				if err := os.MkdirAll(isolinuxDir, 0700); err != nil {
 					return err
 				}
-				imageFile := filepath.Join(tempDir, "imagebuild/test-config/test-image-1.0.0.img")
-				if err := os.MkdirAll(filepath.Dir(imageFile), 0700); err != nil {
-					return err
-				}
-				// create an empty file to simulate the initrd image
-				if err := os.WriteFile(imageFile, []byte{}, 0644); err != nil {
-					return err
-				}
 				rcLocalPath := filepath.Join(isolinuxDir, "rc.local")
 				return os.WriteFile(rcLocalPath, []byte("#!/bin/bash\necho 'init script'"), 0755)
 			},
@@ -530,6 +549,15 @@ func TestInitrdMaker_BuildInitrdImage(t *testing.T) {
 				if err := os.MkdirAll(etcRcDir, 0700); err != nil {
 					t.Fatalf("Failed to create initrd rootfs structure: %v", err)
 				}
+			}
+
+			// For successful build test, use a custom mock executor that creates the file
+			if tt.name == "successful_build" {
+				customMockExecutor := &CustomMockExecutorWithFileCreation{
+					MockExecutor:  shell.NewMockExecutor(tt.mockCommands),
+					ImageBuildDir: initrdMaker.ImageBuildDir,
+				}
+				shell.Default = customMockExecutor
 			}
 
 			err = initrdMaker.BuildInitrdImage()
