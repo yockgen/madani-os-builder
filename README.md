@@ -21,7 +21,7 @@ and Wind River eLxr.
 
 ```bash
 # Build the tool
-go build ./cmd/image-composer
+go build -buildmode=pie -ldflags "-s -w" ./cmd/image-composer
 
 # Or run directly
 go run ./cmd/image-composer --help
@@ -48,7 +48,7 @@ Image Composer Tool is developed in the Go programming language (or `golang`) an
 Build the image-composer using Go directly:
 
 ```bash
-go build ./cmd/image-composer
+go build -buildmode=pie -ldflags "-s -w" ./cmd/image-composer
 ```
 
 Or use Earthly framework for a reproducible build:
