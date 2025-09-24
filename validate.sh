@@ -68,7 +68,10 @@ run_qemu_boot_test() {
 git branch
 #Build the OS Image Composer
 echo "Building the OS Image Composer..."
+echo "Generating binary with go build..."
 go build ./cmd/os-image-composer
+echo "Generating binary with earthly..."
+earthly +build
 
 # Run tests
 echo "Building the Linux image..."
@@ -86,7 +89,7 @@ build_azl3_raw_image() {
 
 build_azl3_iso_image() {
   echo "building AZL3 iso Image."
-  output=$( sudo -S ./os-image-composer build image-templates/azl3-x86_64-minimal-iso.yml 2>&1)
+  output=$( sudo -S ./build/os-image-composer build image-templates/azl3-x86_64-minimal-iso.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
     echo "AZL3 iso Image build passed."
@@ -111,7 +114,7 @@ build_emt3_raw_image() {
 
 build_emt3_iso_image() {
   echo "building EMT3 iso Image."
-  output=$( sudo -S ./os-image-composer build image-templates/emt3-x86_64-minimal-iso.yml 2>&1)
+  output=$( sudo -S ./build/os-image-composer build image-templates/emt3-x86_64-minimal-iso.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
     echo "EMT3 iso Image build passed."
@@ -148,7 +151,7 @@ build_elxr12_iso_image() {
 
 build_elxr12_immutable_raw_image() {
   echo "building ELXR12 immutable raw Image."
-  output=$( sudo -S ./os-image-composer build image-templates/elxr12-x86_64-edge-raw.yml 2>&1)
+  output=$( sudo -S ./build/os-image-composer build image-templates/elxr12-x86_64-edge-raw.yml 2>&1)
   # Check for the success message in the output
   if echo "$output" | grep -q "image build completed successfully"; then
 
