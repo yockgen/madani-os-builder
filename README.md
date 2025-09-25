@@ -17,41 +17,26 @@ and Wind River eLxr.
 - [⚡ Caching](./docs/architecture/os-image-composer-caching.md) - Explanations on package cache and image cache to improve build performance and reduce resource usage
 - [📋 Templates](./docs/architecture/os-image-composer-templates.md) - Explanations on how to create and reuse image templates
 
-## Quick Start
+* Install version 1.22.12 or later of the Go programming language before building the tool; see the [Go installation instructions](https://go.dev/doc/manage-install) for your Linux distribution.
+
+### Build the Tool
+
+Build the OS Image Composer command-line utility by using Go directly or by using the Earthly framework: 
 
 ```bash
-# Build the tool
+# Build the tool:
 go build -buildmode=pie -ldflags "-s -w" ./cmd/os-image-composer
 
 # Or run directly
 go run ./cmd/os-image-composer --help
 
 # Build an image from template
-./os-image-composer build image-templates/azl3-x86_64-edge-raw.yml
+sudo -E ./os-image-composer build image-templates/azl3-x86_64-edge-raw.yml
 
 # Validate a template
 ./os-image-composer validate image-templates/azl3-x86_64-edge-raw.yml
 ```
-
-For complete usage instructions, see the [CLI Specification](./docs/architecture/os-image-composer-cli-specification.md).
-
-## Get Started
-
-### Prerequisites
-
-OS Image Composer tool is developed in the Go programming language (or `golang`) and requires golang version 1.22.12 and above. See installation instructions for a specific distribution [here](https://go.dev/doc/manage-install).
-
-> **Note:** Before building, check out [docs/tutorial/Pre-requisite](./docs/tutorial/Pre-requisite.md) for instructions to install required binaries.
-
-### Build
-
-Build the os-image-composer using Go directly:
-
-```bash
-go build -buildmode=pie -ldflags "-s -w" ./cmd/os-image-composer
-```
-
-Or use Earthly framework for a reproducible build:
+Using Earthly framework produces a reproducible build that automatically includes the version number (from the `--version` parameter), the build date (the current UTC date), and the Git commit SHA (current repository commit).
 
 ```bash
 # Default build
@@ -61,17 +46,40 @@ earthly +build
 earthly +build --version=1.0.0
 ```
 
-The Earthly build automatically includes:
+### Install the Prerequisites for Composing an Image
 
-- Version number (from the --version parameter)
-- Build date (the current UTC date)
-- Git commit SHA (current repository commit)
+Before you compose an operating system image with the OS Image Composer tool, follow the [instructions to install two prerequisites](./docs/tutorial/prerequisite.md):  
+
+* `ukify`, which combines components -- typically a kernel, an initrd, and a UEFI boot stub -- to create a signed Unified Kernel Image (UKI), which is a PE binary that firmware executes to start an embedded Linux kernel.
+
+* `mmdebstrap`, which downloads, unpacks, and installs Debian packages to create a chroot. By using `apt`, it can resolve more than one mirror and resolve complex dependency relationships. 
+
+### Compose or Validate an Image
+
+Now you're ready to compose an image from a built-in template or validate a template. 
+
+```bash
+# Build an image from a template:
+./os-image-composer build image-templates/azl3-x86_64-edge-raw.yml
+
+# Validate a template: 
+./os-image-composer validate image-templates/azl3-x86_64-edge-raw.yml
+```
+
+After the image finishes building, check your output directory. The exact name of the output directory varies by environment and image but should look something like this:   
+
+```
+/os-image-composer/tmp/image-composer/azl3-x86_64-edge-raw/imagebuild/Minimal_Raw$
+```
+
+For complete usage instructions, see the [Command-Line Reference](./docs/architecture/os-image-composer-cli-specification.md). To build an image from your own template, see [Creating and Reusing Image Templates](./docs/architecture/os-image-composer-templates.md). 
 
 ## Configuration
 
 ### Global Configuration
 
-OS Image Composer tool supports global configuration files for setting tool-level parameters that apply across all image builds. Image-specific parameters are defined in YAML image template files.
+The OS Image Composer tool supports global configuration files for setting tool-level parameters that apply across all image builds. Image-specific parameters are defined in YAML image template files. See [Understanding the OS Image Build Process](./docs/architecture/os-image-composer-build-process.md).
+
 
 #### Configuration File Locations
 
@@ -83,6 +91,7 @@ The tool searches for configuration files in the following order:
 4. `~/.os-image-composer/config.yaml` (user home directory)
 5. `~/.config/os-image-composer/config.yaml` (XDG config directory)
 6. `/etc/os-image-composer/config.yaml` (system-wide)
+
 
 #### Configuration Parameters
 
@@ -97,6 +106,33 @@ temp_dir: ""                             # Temporary directory (empty = system d
 logging:
   level: "info"                          # Log level: debug, info, warn, error (default: info)
 ```
+
+## Operations Requiring Sudo Access
+
+The OS Image Composer performs several system-level operations that require elevated privileges (sudo access).
+
+### System Directory Access & Modification
+
+The following system directories require root access for OS Image Composer operations:
+
+- **`/etc/` directory operations**: Writing system configuration files, modifying network configurations, updating system settings
+- **`/dev/` device access**: Block device operations, loop device management, hardware access
+- **`/sys/` filesystem access**: System parameter modification, kernel interface access
+- **`/proc/` filesystem modification**: Process and system state changes
+- **`/boot/` directory**: Boot loader and kernel image management
+- **`/var/` system directories**: System logs, package databases, runtime state
+- **`/usr/sbin/` and `/sbin/`**: System administrator binaries
+
+### Common Privileged Operations
+
+OS Image Composer typically requires sudo for:
+
+- **Block device management**: Creating loop devices, partitioning, filesystem creation
+- **Mount/unmount operations**: Mounting filesystems, managing mount points
+- **Chroot environment setup**: Creating and managing isolated build environments
+- **Package installation**: System-wide package management operations
+- **Boot configuration**: Installing bootloaders, managing EFI settings
+- **Security operations**: Secure boot signing, cryptographic operations
 
 #### Configuration Management Commands
 
@@ -123,10 +159,10 @@ The OS Image Composer tool uses a command-line interface with various commands:
 ./os-image-composer --help
 
 # Build command with template file as positional argument
-./os-image-composer build image-templates/azl3-x86_64-edge-raw.yml
+sudo -E ./os-image-composer build image-templates/azl3-x86_64-edge-raw.yml
 
 # Override config settings with command-line flags
-./os-image-composer build --workers 16 --cache-dir /tmp/cache image-templates/azl3-x86_64-edge-raw.yml
+sudo -E ./os-image-composer build --workers 16 --cache-dir /tmp/cache image-templates/azl3-x86_64-edge-raw.yml
 
 # Validate a template file against the schema
 ./os-image-composer validate image-templates/azl3-x86_64-edge-raw.yml
@@ -147,7 +183,7 @@ The OS Image Composer tool provides the following commands:
 Builds a Linux distribution image based on the specified image template file:
 
 ```bash
-./os-image-composer build [flags] TEMPLATE_FILE
+sudo -E ./os-image-composer build [flags] TEMPLATE_FILE
 ```
 
 Flags:
@@ -163,7 +199,7 @@ Flags:
 Example:
 
 ```bash
-./os-image-composer build --workers 12 --cache-dir ./package-cache image-templates/azl3-x86_64-edge-raw.yml
+sudo -E ./os-image-composer build --workers 12 --cache-dir ./package-cache image-templates/azl3-x86_64-edge-raw.yml
 ```
 
 #### config
@@ -323,7 +359,7 @@ The image template format is validated against a JSON schema to ensure correctne
 
 ### Shell Completion Feature
 
-The os-image-composer CLI supports shell auto-completion for Bash, Zsh, Fish, and PowerShell command-line shells. This feature helps users discover and use commands and flags more efficiently.
+The OS Image Composer CLI supports shell auto-completion for the Bash, Zsh, Fish, and PowerShell command-line shells. This feature helps users discover and use commands and flags more efficiently.
 
 #### Generate Completion Scripts
 
@@ -389,11 +425,11 @@ Once the completion script is installed:
 build      completion  config     help       validate    version
 
 # Tab-complete flags
-./os-image-composer build --<TAB>
+sudo -E ./os-image-composer build --<TAB>
 --cache-dir  --config    --help       --log-level  --verbose    --work-dir   --workers
 
 # Tab-complete YAML files for template file argument
-./os-image-composer build <TAB>
+sudo -E ./os-image-composer build <TAB>
 # Will show YAML files in the current directory
 ```
 
