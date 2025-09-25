@@ -267,7 +267,7 @@ os-image-composer b[TAB]
 os-image-composer build --[TAB]
 ```
 
-See the [Shell Completion](#shell-completion-feature) section for  details.
+See the [Shell Completion](#shell-completion-feature) section for details.
 
 ### Image Template Format
 
