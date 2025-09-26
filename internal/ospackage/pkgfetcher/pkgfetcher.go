@@ -79,7 +79,8 @@ func FetchPackages(urls []string, destDir string, workers int) error {
 				}
 				err := func() error {
 
-					client := network.NewSecureHTTPClient()
+					// client := network.NewSecureHTTPClient()
+					client := network.GetSecureHTTPClient()
 					resp, err := client.Get(url)
 					if err != nil {
 						return err
