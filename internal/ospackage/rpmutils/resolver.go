@@ -386,7 +386,8 @@ func ParseRepositoryMetadata(baseURL, gzHref string) ([]ospackage.PackageInfo, e
 
 // FetchPrimaryURL downloads repomd.xml and returns the href of the primary metadata.
 func FetchPrimaryURL(repomdURL string) (string, error) {
-	resp, err := http.Get(repomdURL)
+	client := network.NewSecureHTTPClient()
+	resp, err := client.Get(repomdURL)
 	if err != nil {
 		return "", fmt.Errorf("GET %s: %w", repomdURL, err)
 	}

@@ -105,7 +105,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 
 		primaryXmlURL, err := FetchPrimaryURL(repoMetaDataURL)
 		if err != nil {
-			return nil, fmt.Errorf("fetching primary.xml.gz URL failed: %w", err)
+			return nil, fmt.Errorf("fetching %s URL failed: %w", repoMetaDataURL, err)
 		}
 		userPkgs, err := ParseRepositoryMetadata(rpItx.URL, primaryXmlURL)
 		if err != nil {

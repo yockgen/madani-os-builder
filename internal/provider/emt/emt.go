@@ -229,7 +229,7 @@ func (p *Emt) downloadImagePkgs(template *config.ImageTemplate) error {
 	rpmutils.RepoCfg = p.repoCfg
 	rpmutils.GzHref = p.zstHref
 	rpmutils.UserRepo = template.GetPackageRepositories()
-	config.FullPkgList, err = rpmutils.DownloadPackages(pkgList, pkgCacheDir, "")
+	template.FullPkgList, err = rpmutils.DownloadPackages(pkgList, pkgCacheDir, "")
 	return err
 }
 
