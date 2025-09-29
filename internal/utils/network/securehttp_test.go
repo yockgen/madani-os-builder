@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
@@ -134,5 +135,92 @@ func TestNewSecureHTTPClient_HTTP2EnabledByDefault(t *testing.T) {
 
 	if resp.ProtoMajor != 2 {
 		t.Errorf("expected HTTP/2, got %s", resp.Proto)
+	}
+}
+
+func TestGetSecureHTTPClient_Singleton(t *testing.T) {
+	// Reset the singleton for this test
+	once = sync.Once{}
+	secureClient = nil
+
+	c1 := GetSecureHTTPClient()
+	c2 := GetSecureHTTPClient()
+
+	if c1 != c2 {
+		t.Errorf("GetSecureHTTPClient should return the same instance, got different instances")
+	}
+
+	// Verify it has the same TLS configuration as NewSecureHTTPClient
+	tr, ok := c1.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", c1.Transport)
+	}
+	if tr.TLSClientConfig == nil {
+		t.Fatalf("expected non-nil TLSClientConfig")
+	}
+	cfg := tr.TLSClientConfig
+
+	if cfg.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = %v, want TLS1.2 (%v)", cfg.MinVersion, tls.VersionTLS12)
+	}
+	if cfg.MaxVersion != tls.VersionTLS13 {
+		t.Errorf("MaxVersion = %v, want TLS1.3 (%v)", cfg.MaxVersion, tls.VersionTLS13)
+	}
+
+	// Check the TLS 1.2 cipher filter contains the 256-bit GCM suites.
+	want := map[uint16]bool{
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:   true,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384: true,
+	}
+	got := map[uint16]bool{}
+	for _, cs := range cfg.CipherSuites {
+		got[cs] = true
+	}
+	for cs := range want {
+		if !got[cs] {
+			t.Errorf("CipherSuites missing %v", cs)
+		}
+	}
+}
+
+func TestGetSecureHTTPClient_ConnectsToTLS13Server(t *testing.T) {
+	// Reset the singleton for this test
+	once = sync.Once{}
+	secureClient = nil
+
+	// TLS 1.3–only server
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.WriteString(w, "ok")
+		if err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	ts.TLS = &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
+	}
+	ts.StartTLS()
+	defer ts.Close()
+
+	c := GetSecureHTTPClient()
+	c.Timeout = 5 * time.Second
+
+	// Trust the server's self-signed certificate.
+	trustServerCert(t, c, ts)
+
+	resp, err := c.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("GET %s failed: %v", ts.URL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if resp.TLS == nil {
+		t.Fatalf("resp.TLS was nil; expected TLS connection state")
+	}
+	if resp.TLS.Version != tls.VersionTLS13 {
+		t.Errorf("negotiated TLS version = %v, want TLS1.3 (%v)", resp.TLS.Version, tls.VersionTLS13)
 	}
 }
