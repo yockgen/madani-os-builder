@@ -131,7 +131,7 @@ func TestUserPackages(t *testing.T) {
 				}
 				Architecture = "amd64"
 			},
-			expectError: false, // The function skips invalid repos and continues
+			expectError: true,
 		},
 	}
 

@@ -115,11 +115,10 @@ func TestFetchPackages_HTTPErrors(t *testing.T) {
 		server.URL + "/success.rpm",
 	}
 
-	// This should not return an error even if some downloads fail
-	// The function logs errors but continues processing
+	// This should return an error due to HTTP failures
 	err = FetchPackages(urls, tempDir, 1)
-	if err != nil {
-		t.Errorf("FetchPackages should not return error for HTTP failures, got: %v", err)
+	if err == nil {
+		t.Errorf("FetchPackages should return error for HTTP failures, got nil")
 	}
 
 	// Check that successful download still happened
@@ -318,10 +317,10 @@ func TestFetchPackages_NetworkError(t *testing.T) {
 		"http://non-existent-server-12345.example.com/package.rpm",
 	}
 
-	// This should not return an error - errors are logged but not returned
+	// This should return an error due to network failure
 	err = FetchPackages(urls, tempDir, 1)
-	if err != nil {
-		t.Errorf("FetchPackages should not return error for network failures, got: %v", err)
+	if err == nil {
+		t.Errorf("FetchPackages should return error for network failures, got nil")
 	}
 }
 
