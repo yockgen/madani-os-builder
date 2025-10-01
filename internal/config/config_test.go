@@ -103,7 +103,7 @@ func TestEmptyUsersConfig(t *testing.T) {
 	}
 
 	nonExistentUser := template.GetUserByName("anyuser")
-	if nonExistentUser == nil {
+	if nonExistentUser != nil {
 		t.Errorf("expected not to find any user in empty config")
 	}
 }
