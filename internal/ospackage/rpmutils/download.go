@@ -103,7 +103,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 		repoMetaDataURL := GetRepoMetaDataURL(rpItx.URL, metadataXmlPath)
 		if repoMetaDataURL == "" {
 			log.Errorf("invalid repo metadata URL: %s/%s, skipping", rpItx.URL, metadataXmlPath)
-			return nil, fmt.Errorf("invalid repo metadata URL: %s/%s", rpItx.URL, metadataXmlPath)
+			continue
 		}
 
 		primaryXmlURL, err := FetchPrimaryURL(repoMetaDataURL)
