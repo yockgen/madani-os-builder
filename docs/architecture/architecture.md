@@ -70,7 +70,17 @@ The following diagram shows the network context of the OS Image Composer tool:
 ![OS Image Composer Network Diagram](assets/os-image-composer-network-diagram.drawio.svg).
 
 The diagram illustrates how different components of the product's system
-architecture communicate with each other.
+architecture communicate with each other as well as the flow of setup and
+deployment process:
+
+1. Clone image composer tool repository from Intel Open Edge Platform
+2. Install or Build the Image Composer Tool to the target architecture.
+3. Use the Image Composer Tool to compose your custom OS Image for the desired
+   OS distribution. The remote package repositories perform server side
+   validation on the HTTPS requests from the image composer tool. Integrity of
+   each downloaded package is verified using authenticated GPG keys.
+4. Deploy the composed OS Image on edge node using your preferred
+   deployment method.
 
 ### Network Security Considerations
 
@@ -94,16 +104,16 @@ the OS Image Composer tool:
 
 The tools for composing an image are grouped under following components:
 **Provider**, **Chroot**, **Image**, **OsPackage**, and **Config**.
-For modularity, each group contains a set of the components for
-the OS Image Composer tool's functions.
+For modularity, each group contains a set of the components for the
+OS Image Composer tool's functions.
 
 The **provider** component takes data from *config* as its input, then calls
-**chroot**, **image** and **OsPackage** components to set up buidling the image.
+**chroot**, **image** and **OsPackage** components to set up building the image.
 **Chroot** libraries are used to create ChrootEnv for building the OS Image.
 The **image** libraries provide the general functions for building OS images.
-The **OsPackage** libraries include utilities for handling debian and
-rpm packages. The **config** component contains configuration data for the image
-that will be created.
+The **OsPackage** libraries include utilities for handling debian and rpm packages.
+The **config** component contains configuration data for the image that will be
+created.
 
 ### Chroot
 
@@ -139,15 +149,15 @@ distribution-specific functionality from the core and common business logic.-->
 
 ![components - package](assets/components.drawio.OsPackage.svg)
 
-*Package* groups the libraries that provide the unified interface of the
+*OsPackage* groups the libraries that provide the unified interface of the
 operating system vendors' remote package repositories. It analyzes given
 package lists and downloads all the packages and dependencies from the target
 operating system's remote package repository to a local cache.
 
 It also verifies signatures of the downloaded packages to ensure they are
-authenticated and from certified source. It also provides the unified interface
-to install the packages and the dependencies in the correct order into the
-image rootfs directory.
+authenticated and from a certified source. It also provides the unified
+interface to install the packages and the dependencies in the correct order
+into the image rootfs directory.
 
 ## Operational Flow
 
