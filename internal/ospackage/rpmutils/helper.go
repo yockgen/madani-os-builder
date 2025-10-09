@@ -53,31 +53,6 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 		op, ver, hasVersionConstraint = extractVersionRequirement(parentPkg.RequiresVer, extractBasePackageNameFromFile(candidates[0].Name))
 	}
 
-	//yockgen: start
-	depNm := extractBasePackageNameFromFile(candidates[0].Name)
-	parentFilter := "core-packages-base-image" //"ca-certificates"     //"systemd-ukify"
-	depFilter := "core-packages-container"     //"ca-certificates-shared" //"systemd"
-	if strings.HasPrefix(parentPkg.Name, parentFilter) && depNm == depFilter {
-		fmt.Printf("op, ver, hasVersionConstraint = extractVersionRequirement(%#v, %#v)\n", parentPkg.RequiresVer, extractBasePackageNameFromFile(candidates[0].Name))
-		fmt.Printf("\nyockgen99: parent=%s", parentPkg.Name)
-		for _, req := range parentPkg.RequiresVer {
-			if strings.HasPrefix(req, depNm) {
-				fmt.Printf(" required=%s\n", req)
-			}
-		}
-		if !hasVersionConstraint {
-			fmt.Printf("yockgen99: no version specified for %s\n\n", extractBasePackageNameFromFile(candidates[0].Name))
-		} else {
-
-			//display all candidates
-			for _, itx := range candidates {
-				fmt.Printf("yockgen99: candidate=%s %s\n", itx.Name, itx.Version)
-			}
-			fmt.Printf("yockgen99: version constraint for %s is %s%s\n\n", extractBasePackageNameFromFile(candidates[0].Name), op, ver)
-		}
-	}
-	//yockgen: end
-
 	if hasVersionConstraint {
 		// First pass: look for candidates from the same repo that meet version constraint
 		var sameRepoMatches []ospackage.PackageInfo
@@ -326,7 +301,6 @@ func findAllCandidates(parent ospackage.PackageInfo, depName string, all []ospac
 	// If no direct matches found, search in Files field
 	if len(candidates) == 0 {
 		for _, pi := range all {
-			// log.Debugf("yockgen findAllCandidates: found %d candidates for %q %d", len(candidates), depName, len(pi.Files))
 			for _, file := range pi.Files {
 				if file == depName {
 					candidates = append(candidates, pi)
@@ -340,37 +314,6 @@ func findAllCandidates(parent ospackage.PackageInfo, depName string, all []ospac
 		cmp, _ := comparePackageVersions(candidates[i].Version, candidates[j].Version)
 		return cmp > 0
 	})
-
-	// yockgen Instead of matching the whole string, check if depName has a prefix "curl-libs-8."
-	// if strings.HasPrefix(depName, "libpopt.so.0") {
-
-	// 	f, err := os.OpenFile("/data/yockgen/debug.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	// 	if err == nil {
-	// 		defer f.Close()
-	// 		fmt.Fprintf(f, "\nyockgen1: dep=%s pkg=%s version=%s", depName, parent.Name, parent.Version)
-	// 		for _, itx := range parent.RequiresVer {
-	// 			if strings.HasPrefix(itx, "libop5") {
-	// 				fmt.Fprintf(f, " depend=%s", itx)
-	// 			}
-	// 		}
-	// 		for _, itx := range candidates {
-	// 			fmt.Fprintf(f, "\ncandidate=%s %s\n", itx.Name, itx.Version)
-
-	// 		}
-	// 		// fmt.Fprintf(f, "\n")
-
-	// 		for _, pi := range all {
-	// 			for _, provided := range pi.Provides {
-	// 				if strings.HasPrefix(provided, "libpopt") {
-	// 					fmt.Fprintf(f, "\nyockgen provided: %s\n", provided)
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-
-	// 	log.Debugf("yockgen:findAllCandidates: found %d candidates for dependency %q of package %q", len(candidates), depName, parent.Name)
-
-	// }
 
 	return candidates, nil
 }

@@ -112,9 +112,6 @@ func VerifyAll(paths []string, pubkeyPaths []string, workers int) []Result {
 
 // verifyWithGoRpm uses go-rpm to GPG-check + MD5-check a single file.
 func verifyWithGoRpm(rpmPath, pubkeyPath string) error {
-
-	// return nil // yockgen skip rpm verification for now
-
 	// load the keyring
 	keyringFile, err := os.Open(pubkeyPath)
 	if err != nil {

@@ -330,16 +330,6 @@ func ParseRepositoryMetadata(baseURL, gzHref string) ([]ospackage.PackageInfo, e
 			}
 		}
 	}
-
-	// // Open the file once before the loop for efficiency
-	// f, err := os.OpenFile("yockgen-azl-all.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	// if err == nil {
-	// 	defer f.Close()
-	// 	for _, pi := range infos {
-	// 		fmt.Fprintln(f, pi.Name, pi.RequiresVer)
-	// 	}
-	// }
-
 	return infos, nil
 }
 
@@ -455,7 +445,7 @@ func MatchRequested(requests []string, all []ospackage.PackageInfo) ([]ospackage
 // ResolveDependencies takes a seed list of PackageInfos (the exact versions
 // matched) and the full list of all PackageInfos from the repo, and
 // returns the minimal closure of PackageInfos needed to satisfy all Requires.
-func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
+func ResolveDependencies01(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
 
 	// Build helper maps:
 	byName := make(map[string]ospackage.PackageInfo, len(all))
@@ -580,7 +570,7 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 // ResolveDependencies takes a seed list of PackageInfos (the exact versions
 // matched) and the full list of all PackageInfos from the repo, and
 // returns the minimal closure of PackageInfos needed to satisfy all Requires.
-func ResolveDependencies02(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
+func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.PackageInfo) ([]ospackage.PackageInfo, error) {
 	log := logger.Logger()
 
 	// Build maps for fast lookup
@@ -687,22 +677,6 @@ func ResolveDependencies02(requested []ospackage.PackageInfo, all []ospackage.Pa
 				if resultPkg, exists := resultMap[cur.Name]; exists {
 					resultPkg.Requires = append(resultPkg.Requires, chosenCandidate.Name)
 				}
-
-				//yockgen
-				// if strings.HasPrefix(depName, "systemd") && strings.HasPrefix(cur.Name, "systemd-ukify") {
-				// 	for k := range neededSet {
-				// 		if strings.HasPrefix(k, "systemd") {
-				// 			fmt.Printf("yockgen dep=%s parent=%s req=", depName, cur.Name)
-				// 			for _, r := range cur.RequiresVer {
-				// 				if strings.HasPrefix(r, "systemd") {
-				// 					fmt.Printf("%s,", r)
-				// 				}
-				// 			}
-				// 			fmt.Printf("\nchosen=%s", chosenCandidate.Name)
-				// 			fmt.Printf("\n\n")
-				// 		}
-				// 	}
-				// }
 
 				// Add chosen candidate to the queue for further processing
 				queue = append(queue, chosenCandidate)

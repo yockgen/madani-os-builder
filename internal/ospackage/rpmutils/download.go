@@ -120,11 +120,6 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 	}
 
 	return allUserPackages, nil
-
-	// for _, pkg := range allUserPackages {
-	// 	log.Debugf("rpm pkg -> %s %s %s", pkg.Name, pkg.Version, pkg.URL)
-	// }
-	// return []ospackage.PackageInfo{}, nil //fmt.Errorf("yockgen user package fetching not supported for rpm")
 }
 
 func isAcceptedChar(s string) bool {
