@@ -601,29 +601,6 @@ Multiple build hosts can share caches for efficiency:
 - All hosts benefit from any host's downloads
 - Consistent chroot environments across infrastructure
 
-**Setup Options:**
-
-**Option 1: Shared Read-Write (Small Teams)**
-```bash
-# All hosts use same cache and workspace
-cache_dir: /mnt/shared/cache
-work_dir: /mnt/shared/workspace
-```
-
-**Option 2: Shared Read-Only Cache (CI/CD)**
-```bash
-# Dedicated host populates cache (read-write)
-# Build agents use cache (read-only) and local workspace
-
-# Cache populator:
-cache_dir: /mnt/shared/cache
-work_dir: /var/tmp/workspace
-
-# Build agents:
-cache_dir: /mnt/shared/cache-ro  # Read-only mount
-work_dir: /var/tmp/workspace     # Local
-```
-
 ### Cache Performance Tuning
 
 **For Fast Initial Cache Population:**
