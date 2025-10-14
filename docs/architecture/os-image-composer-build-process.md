@@ -2,10 +2,10 @@
 
 The OS Image Composer tool creates customized OS images through a well-defined build pipeline. Understanding this process helps you optimize your image builds and troubleshoot issues effectively.
 
-## Contents
+## Table of Contents
 
 - [Understanding the OS Image Composer Build Process](#understanding-the-os-image-composer-build-process)
-  - [Contents](#contents)
+  - [Table of Contents](#table-of-contents)
   - [Overview of the Build Pipeline](#overview-of-the-build-pipeline)
   - [Build Command Workflow](#build-command-workflow)
   - [Build Stages in Detail](#build-stages-in-detail)
@@ -259,7 +259,7 @@ The build process can be customized through multiple configuration layers.
 
 ### Global Configuration Options
 
-[Global configuration](./os-image-composer-cli-specification.md#global-configuration-file) is typically stored in `/etc/os-image-composer/config.yml`:
+[Global configuration](./os-image-composer-cli-specification.md#global-configuration-file) default stored in root of the repository os-image-composer.yml`:
 
 ```yaml
 # Worker configuration
@@ -399,7 +399,7 @@ The chroot environment in `workspace/{provider-id}/chrootenv/` is automatically 
 
 **3. Optimize Worker Count**
 
-Adjust the worker count based on your system:
+Adjust the worker count based on your system. For example:
 
 ```bash
 # For systems with fast network and many CPU cores
@@ -625,12 +625,11 @@ The OS Image Composer build process uses a single unified `build` command that i
 
 **Key Takeaways:**
 
-1. **Unified Command**: A single `build` command orchestrates the entire process automatically - no separate commands for individual stages
-2. **OS-Specific Configuration**: Default templates are organized by OS vendor, distribution, and architecture in `config/osv/`
-3. **Template Merging**: OS-specific default templates provide base configuration, user image templates (in `image-templates/`) customize
-4. **Caching System**: Package caching and chroot reuse dramatically improve performance
-5. **Two Image Types**: `raw` (with format conversion to vhd, vhdx, qcow2, vmdk, vdi) and `iso` for different deployment scenarios
-6. **Troubleshooting Tools**: Verbose logging and dependency graphs facilitate debugging
+1. **OS-Specific Configuration**: Default templates are organized by OS vendor, distribution, and architecture in `config/osv/`
+1. **Template Merging**: OS-specific default templates provide base configuration, user image templates (in `image-templates/`) customize
+1. **Caching System**: Package caching and chroot reuse dramatically improve performance
+1. **Two Image Types**: `raw` (with format conversion to vhd, vhdx, qcow2, vmdk, vdi) and `iso` for different deployment scenarios
+1. **Troubleshooting Tools**: Verbose logging and dependency graphs facilitate debugging
 
 ## Related Documentation
 
