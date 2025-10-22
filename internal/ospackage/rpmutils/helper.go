@@ -314,6 +314,19 @@ func ResolveTopPackageConflicts(want, pkgType string, all []ospackage.PackageInf
 			candidates = append(candidates, pi)
 			continue
 		}
+		// 3) prefix by want-version ("acl-")
+		// expected pi.Name should look like openvino-2025.3.0-2025.3.0.19807-1.noarch.rpm
+		// want = openvino-2025.3.0
+		if strings.HasPrefix(pi.Name, want) {
+			// Extract string after "-" and compare with pi.Version
+			if dashIdx := strings.LastIndex(want, "-"); dashIdx != -1 {
+				verStr := want[dashIdx+1:]
+				if strings.Contains(pi.Version, verStr) {
+					candidates = append(candidates, pi)
+					continue
+				}
+			}
+		}
 		// // 3) prefix by want-version ("acl-")
 		// if strings.HasPrefix(pi.Name, want+"-") {
 		// 	candidates = append(candidates, pi)
