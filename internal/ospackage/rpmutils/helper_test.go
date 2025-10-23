@@ -510,7 +510,6 @@ func TestResolveTopPackageConflicts(t *testing.T) {
 		{
 			name:        "Exact match with file extension",
 			want:        "acct_6.6.4-5+b1_amd64",
-			pkgType:     "deb",
 			dist:        "",
 			expectedPkg: "acct",
 			expectFound: true,
@@ -518,7 +517,6 @@ func TestResolveTopPackageConflicts(t *testing.T) {
 		{
 			name:        "Base name match",
 			want:        "acct",
-			pkgType:     "rpm",
 			dist:        "",
 			expectedPkg: "acct", // Should find the first acct package
 			expectFound: true,
@@ -526,7 +524,6 @@ func TestResolveTopPackageConflicts(t *testing.T) {
 		{
 			name:        "Base name match with dist filter",
 			want:        "acct",
-			pkgType:     "rpm",
 			dist:        "azl3",
 			expectedPkg: "acct", // The exact package name returned might be different due to filtering logic
 			expectFound: true,
@@ -534,7 +531,6 @@ func TestResolveTopPackageConflicts(t *testing.T) {
 		{
 			name:        "No match",
 			want:        "nonexistent",
-			pkgType:     "rpm",
 			dist:        "",
 			expectFound: false,
 		},
@@ -543,7 +539,7 @@ func TestResolveTopPackageConflicts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Dist = tt.dist
-			pkg, found := ResolveTopPackageConflicts(tt.want, tt.pkgType, allPackages)
+			pkg, found := ResolveTopPackageConflicts(tt.want, allPackages)
 			if found != tt.expectFound {
 				t.Errorf("ResolveTopPackageConflicts() found = %v, want %v", found, tt.expectFound)
 			}
