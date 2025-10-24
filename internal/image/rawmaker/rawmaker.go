@@ -7,7 +7,7 @@ import (
 
 	"github.com/open-edge-platform/os-image-composer/internal/chroot"
 	"github.com/open-edge-platform/os-image-composer/internal/config"
-
+	"github.com/open-edge-platform/os-image-composer/internal/config/manifest"
 	"github.com/open-edge-platform/os-image-composer/internal/image/imageconvert"
 	"github.com/open-edge-platform/os-image-composer/internal/image/imagedisc"
 	"github.com/open-edge-platform/os-image-composer/internal/image/imageos"
@@ -158,6 +158,12 @@ func (rawMaker *RawMaker) BuildRawImage() error {
 	if err := rawMaker.ImageConvert.ConvertImageFile(finalImagePath, rawMaker.template); err != nil {
 		rawMaker.cleanupImageFileOnError(finalImagePath)
 		return fmt.Errorf("failed to convert image file: %w", err)
+	}
+
+	// Copy SBOM to image build directory
+	if err := manifest.CopySBOMToImageBuildDir(rawMaker.ImageBuildDir); err != nil {
+		log.Warnf("Failed to copy SBOM to image build directory: %v", err)
+		// Don't fail the build if SBOM copy fails, just log warning
 	}
 
 	log.Infof("Raw image build completed successfully: %s", finalImagePath)

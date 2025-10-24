@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/open-edge-platform/os-image-composer/internal/config"
 	"github.com/open-edge-platform/os-image-composer/internal/config/version"
 	"github.com/open-edge-platform/os-image-composer/internal/ospackage"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/logger"
@@ -180,9 +181,6 @@ func WriteSPDXToFile(pkgs []ospackage.PackageInfo, outFile string) error {
 		spdx.Packages = append(spdx.Packages, spdxPkg)
 	}
 
-	// TODO: The relative file path here should be where
-	// the final image is being stored and not under temp
-
 	if err := os.MkdirAll(filepath.Dir(outFile), 0700); err != nil {
 		log.Errorf("Failed to create SPDX output directory: %v", err)
 		return fmt.Errorf("failed to create output directory: %w", err)
@@ -235,4 +233,38 @@ func spdxSupplier(origin string) string {
 		}
 	}
 	return fmt.Sprintf("Organization: %s", o)
+}
+
+// CopySBOMToImageBuildDir copies the SBOM from temp directory to the image build directory
+// This ensures the SBOM is packaged alongside the final image artifact
+func CopySBOMToImageBuildDir(imageBuildDir string) error {
+	log.Infof("Copying SBOM to image build directory: %s", imageBuildDir)
+
+	// Source: SBOM in temp directory (same location where it was generated)
+	srcSBOM := filepath.Join(config.TempDir(), DefaultSPDXFile)
+
+	// Destination: SBOM in image build directory
+	dstSBOM := filepath.Join(imageBuildDir, DefaultSPDXFile)
+
+	// Check if source SBOM exists
+	if _, err := os.Stat(srcSBOM); os.IsNotExist(err) {
+		log.Warnf("SBOM file not found at %s, skipping copy", srcSBOM)
+		return nil
+	}
+
+	// Read source SBOM with security checks
+	data, err := security.SafeReadFile(srcSBOM, security.RejectSymlinks)
+	if err != nil {
+		log.Errorf("Failed to read SBOM file: %v", err)
+		return fmt.Errorf("failed to read SBOM file: %w", err)
+	}
+
+	// Write to destination with security checks
+	if err := security.SafeWriteFile(dstSBOM, data, 0644, security.RejectSymlinks); err != nil {
+		log.Errorf("Failed to write SBOM to image build directory: %v", err)
+		return fmt.Errorf("failed to write SBOM to image build directory: %w", err)
+	}
+
+	log.Infof("Successfully copied SBOM to: %s", dstSBOM)
+	return nil
 }
