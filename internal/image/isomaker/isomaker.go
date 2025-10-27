@@ -9,7 +9,6 @@ import (
 	"github.com/open-edge-platform/os-image-composer/internal/chroot"
 	"github.com/open-edge-platform/os-image-composer/internal/config"
 	"github.com/open-edge-platform/os-image-composer/internal/config/manifest"
-	"github.com/open-edge-platform/os-image-composer/internal/image/imagedisc"
 	"github.com/open-edge-platform/os-image-composer/internal/image/imageos"
 	"github.com/open-edge-platform/os-image-composer/internal/image/initrdmaker"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/file"
