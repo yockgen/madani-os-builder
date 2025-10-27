@@ -444,7 +444,6 @@ func (chrootEnv *ChrootEnv) CleanupChrootEnv(targetOs, targetDist, targetArch st
 					if _, err := shell.ExecCmd("rm -f "+chrootRepoCongfigPath+"/*", true, shell.HostPath, nil); err != nil {
 						return fmt.Errorf("failed to remove existing local repo config files: %w", err)
 					}
-					repoConfigBackupPath := filepath.Join(chrootEnv.ChrootEnvRoot, "repo-config-backup")
 					if err := file.CopyDir(repoConfigBackupPath, chrootRepoCongfigPath, "-f", true); err != nil {
 						return fmt.Errorf("failed to backup existing repo config files: %w", err)
 					}
