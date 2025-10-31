@@ -338,7 +338,8 @@ func (chrootEnv *ChrootEnv) createChrootRepo(targetOs, targetDist string) error 
 		return fmt.Errorf("chroot repo config file does not exist: %s", localRepoCongfigPath)
 	}
 
-	if err := chrootEnv.CopyFileFromHostToChroot(localRepoCongfigPath, repoConfigDir); err != nil {
+	repoConfigDistFile := filepath.Join(repoConfigDir, repoConfigFile)
+	if err := chrootEnv.CopyFileFromHostToChroot(localRepoCongfigPath, repoConfigDistFile); err != nil {
 		return fmt.Errorf("failed to copy local.repo: %w", err)
 	}
 
