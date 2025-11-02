@@ -17,7 +17,20 @@ var (
 )
 
 func main() {
-	// Initialize global configuration first
+	cobra.OnInitialize(initConfig)
+
+	// Create and execute root command
+	rootCmd := createRootCommand()
+	security.AttachRecursive(rootCmd, security.DefaultLimits())
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// initConfig reads in config file and ENV variables if set.
+func initConfig() {
+	// Initialize global configuration
 	configFilePath := configFile
 	if configFilePath == "" {
 		configFilePath = config.FindConfigFile()
@@ -33,24 +46,16 @@ func main() {
 	config.SetGlobal(globalConfig)
 
 	// Setup logger with configured level
-	_, cleanup := logger.InitWithLevel(globalConfig.Logging.Level)
-	defer cleanup()
+	logger.InitWithLevel(globalConfig.Logging.Level)
 
-	// Create and execute root command
-	rootCmd := createRootCommand()
-	security.AttachRecursive(rootCmd, security.DefaultLimits())
-
-	// Handle log level override after flag parsing
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		if logLevel != "" {
-			// Update both the local config and the global singleton
-			globalConfig.Logging.Level = logLevel
-			config.SetGlobal(globalConfig) // Update singleton with new log level
-			logger.SetLogLevel(logLevel)
-		}
+	// Handle log level override
+	if logLevel != "" {
+		globalConfig.Logging.Level = logLevel
+		config.SetGlobal(globalConfig)
+		logger.SetLogLevel(logLevel)
 	}
 
-	// Log configuration info using global config functions
+	// Log configuration info
 	log := logger.Logger()
 	if configFilePath != "" {
 		log.Infof("Using configuration from: %s", configFilePath)
@@ -59,10 +64,6 @@ func main() {
 	workDir, _ := config.WorkDir()
 	log.Debugf("Config: workers=%d, cache_dir=%s, work_dir=%s, temp_dir=%s",
 		config.Workers(), cacheDir, workDir, config.TempDir())
-
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
 }
 
 // createRootCommand creates and configures the root cobra command with all subcommands
@@ -94,6 +95,7 @@ Use 'os-image-composer <command> --help' for more information about a command.`,
 	rootCmd.AddCommand(createValidateCommand())
 	rootCmd.AddCommand(createVersionCommand())
 	rootCmd.AddCommand(createConfigCommand())
+	rootCmd.AddCommand(createCacheCommand())
 	rootCmd.AddCommand(createInstallCompletionCommand())
 
 	return rootCmd
