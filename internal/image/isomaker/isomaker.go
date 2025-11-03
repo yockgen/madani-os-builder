@@ -225,6 +225,15 @@ func (isoMaker *IsoMaker) copyImagePkgsToIso(template *config.ImageTemplate, ins
 		}
 	}
 
+	pkgCacheChrootDir, err := isoMaker.ChrootEnv.GetChrootEnvPath(pkgCacheDestDir)
+	if err != nil {
+		return fmt.Errorf("failed to get chroot path for iso cache-repo: %w", err)
+	}
+
+	if err := isoMaker.ChrootEnv.UpdateChrootLocalRepoMetadata(pkgCacheChrootDir, template.Target.Arch, true); err != nil {
+		return fmt.Errorf("failed to update local cache repository metadata in iso: %w", err)
+	}
+
 	return nil
 }
 

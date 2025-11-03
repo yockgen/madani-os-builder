@@ -114,6 +114,7 @@
               "id": { "type": "string", "description": "Partition identifier" },
               "name": { "type": "string", "description": "Partition name/label" },
               "type": { "type": "string", "description": "Partition type" },
+              "typeUUID": { "type": "string", "description": "Partition type UUID" },
               "fsType": { "type": "string", "description": "Filesystem type" },
               "start": { "type": "string", "description": "Partition start offset" },
               "end": { "type": "string", "description": "Partition end offset (0 = rest of disk)" },
