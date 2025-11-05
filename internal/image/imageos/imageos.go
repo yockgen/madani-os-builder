@@ -883,6 +883,7 @@ func getKernelVersion(installRoot string) (string, error) {
 // Helper to update initramfs for the given kernel version
 func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTemplate) error {
 	initrdPath := fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
+
 	if template.IsImmutabilityEnabled() {
 		cmd := fmt.Sprintf(
 			"dracut --force --add systemd-veritysetup --no-hostonly --verbose --kver %s %s",
@@ -892,28 +893,44 @@ func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTe
 		_, err := shell.ExecCmd(cmd, true, installRoot, nil)
 		if err != nil {
 			log.Errorf("Failed to update initramfs with veritysetup: %v", err)
-			err = fmt.Errorf("failed to update initramfs with veritysetup: %w", err)
+			return fmt.Errorf("failed to update initramfs with veritysetup: %w", err)
 		}
-		return err
+	} else {
+		// Check if the initrdPath file exists; if not, create it
+		fullInitrdPath := filepath.Join(installRoot, initrdPath)
+		if _, err := os.Stat(fullInitrdPath); err == nil {
+			// initrd file already exists
+			log.Debugf("Initramfs already exists, skipping update: %s", fullInitrdPath)
+			return nil
+		}
+		cmd := fmt.Sprintf(
+			"dracut -f %s %s",
+			initrdPath,
+			kernelVersion,
+		)
+		_, err := shell.ExecCmd(cmd, true, installRoot, nil)
+		if err != nil {
+			log.Errorf("Failed to update initramfs: %v", err)
+			return fmt.Errorf("failed to update initramfs: %w", err)
+		}
 	}
-	// Check if the initrdPath file exists; if not, create it
-	fullInitrdPath := filepath.Join(installRoot, initrdPath)
-	if _, err := os.Stat(fullInitrdPath); err == nil {
-		// initrd file already exists
-		log.Debugf("Initramfs already exists, skipping update: %s", fullInitrdPath)
-		return nil
-	}
+
+	// Add USB drivers - this should be done regardless of immutability setting
+	kdrivers := "usbcore usb-common"
 	cmd := fmt.Sprintf(
-		"dracut -f %s %s",
-		initrdPath,
+		"dracut --force --add-drivers '%s' --no-hostonly --verbose --kver %s %s",
+		kdrivers,
 		kernelVersion,
+		initrdPath,
 	)
 	_, err := shell.ExecCmd(cmd, true, installRoot, nil)
 	if err != nil {
-		log.Errorf("Failed to update initramfs: %v", err)
-		err = fmt.Errorf("failed to update initramfs: %w", err)
+		log.Errorf("Failed to add USB drivers to initramfs: %v", err)
+		return fmt.Errorf("failed to add USB drivers to initramfs: %w", err)
 	}
-	return err
+
+	log.Debugf("USB drivers added to initramfs successfully")
+	return nil
 }
 
 // Helper to determine the ESP directory (assumes /boot/efi)
