@@ -48,7 +48,8 @@ func initConfig() {
 	config.SetGlobal(globalConfig)
 
 	// Setup logger with configured level (will be overridden in PersistentPreRun if needed)
-	logger.InitWithLevel(globalConfig.Logging.Level)
+	_, cleanup := logger.InitWithLevel(globalConfig.Logging.Level)
+	defer cleanup()
 }
 
 // createRootCommand creates and configures the root cobra command with all subcommands
