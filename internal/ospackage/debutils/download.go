@@ -219,7 +219,7 @@ func checkFileExists(url string) (bool, error) {
 	defer func() {
 		// Properly drain and close the response body to avoid connection leaks
 		if resp.Body != nil {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
 	}()
