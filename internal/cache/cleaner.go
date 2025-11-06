@@ -168,7 +168,7 @@ func workspaceTargets(providerID string) ([]string, []string, error) {
 	}
 
 	// Collect providers to clean.
-	providers := []string{}
+	var providers []string
 	if providerID != "" {
 		providers = append(providers, providerID)
 	} else {
