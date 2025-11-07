@@ -29,15 +29,15 @@ systemConfig:
     - policykit-1
     - curl
     - wget
-    - uefi-ext4
+    - efibootmgr
     - systemd-resolved
     - cloud-guest-utils
     - xterm
-    - dracut
+    - initramfs-tools
     - systemd-boot
-    - grub2
     - grub-pc-bin
     - grub-efi-amd64-bin
+
 
   additionalFiles:
     - local: ../additionalfiles/dhcp.network
