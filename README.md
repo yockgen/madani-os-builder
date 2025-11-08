@@ -58,9 +58,8 @@ For production and release builds, use the Earthly framework, which produces a r
 # Default build (uses latest git tag for version)
 earthly +build
 
-# Build with specific version:
-earthly +build --version=1.0.0
-```
+# Build with custom version metadata
+earthly +build --VERSION=1.2.0
 
 ### Install via Debian Package (Ubuntu/Debian)
 
@@ -71,7 +70,7 @@ For Ubuntu and Debian systems, you can build and install OS Image Composer as a 
 Use the Earthly `+deb` target to create a `.deb` package:
 
 ```bash
-# Build with default parameters (version 1.0.0, amd64)
+# Build with default parameters (latest git tag, amd64)
 earthly +deb
 
 # Build with custom version and architecture
@@ -81,7 +80,7 @@ earthly +deb --VERSION=1.2.0 --ARCH=amd64
 earthly +deb --VERSION=1.0.0 --ARCH=arm64
 ```
 
-The package will be created in the `dist/` directory as `os-image-composer_<VERSION>_<ARCH>.deb`.
+The package will be created in the `dist/` directory as `os-image-composer_<VERSION>_<ARCH>.deb`. A companion file `dist/os-image-composer.version` captures the resolved version when the package was built.
 
 #### Install the Package
 
