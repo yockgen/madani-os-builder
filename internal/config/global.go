@@ -20,7 +20,7 @@ type GlobalConfig struct {
 	// Core tool settings
 	Workers   int    `yaml:"workers" json:"workers"`       // Number of concurrent download workers (1-100, default: 8)
 	ConfigDir string `yaml:"config_dir" json:"config_dir"` // Directory for configuration files (default: ./config)
-	CacheDir  string `yaml:"cache_dir" json:"cache_dir"`   // Package cache directory where downloaded RPMs/DEBs are stored (now uses temp_dir/cache)
+	CacheDir  string `yaml:"cache_dir" json:"cache_dir"`   // Package cache directory where downloaded RPMs/DEBs are stored (default: ./cache)
 	WorkDir   string `yaml:"work_dir" json:"work_dir"`     // Working directory for build operations and image assembly (default: ./workspace)
 	TempDir   string `yaml:"temp_dir" json:"temp_dir"`     // Temporary directory for short-lived files like GPG keys and metadata parsing (empty = system default)
 
@@ -67,7 +67,7 @@ func DefaultGlobalConfig() *GlobalConfig {
 	return &GlobalConfig{
 		Workers:   8,
 		ConfigDir: "./config",
-		CacheDir:  "./cache", // This value is ignored - cache will be placed in temp_dir/cache
+		CacheDir:  "./cache",
 		WorkDir:   "./workspace",
 		TempDir:   "./tmp",
 
@@ -273,10 +273,7 @@ func ConfigDir() (string, error) {
 }
 
 func CacheDir() (string, error) {
-	// Use temp_dir/cache instead of the configured cache_dir
-	tempDir := TempDir()
-	cacheDir := filepath.Join(tempDir, "cache")
-	cacheDir, err := filepath.Abs(cacheDir)
+	cacheDir, err := filepath.Abs(Global().CacheDir)
 	if err != nil {
 		log.Errorf("Failed to resolve cache directory: %v", err)
 		return "", fmt.Errorf("failed to resolve cache directory: %w", err)

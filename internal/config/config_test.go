@@ -2028,7 +2028,6 @@ func TestDefaultGlobalConfig(t *testing.T) {
 	if config.CacheDir != "./cache" {
 		t.Errorf("expected default cache dir './cache', got '%s'", config.CacheDir)
 	}
-	// Note: The actual cache directory used will be temp_dir/cache, not the CacheDir field value
 
 	if config.WorkDir != "./workspace" {
 		t.Errorf("expected default work dir './workspace', got '%s'", config.WorkDir)

@@ -831,13 +831,7 @@ func buildImageUKI(installRoot string, template *config.ImageTemplate) error {
 
 		// 2. Build UKI with ukify
 		kernelPath := filepath.Join("/boot", "vmlinuz-"+kernelVersion)
-		// Ubuntu uses initrd.img- prefix, other distributions use initramfs- prefix
-		var initrdPath string
-		if template.Target.OS == "ubuntu" {
-			initrdPath = fmt.Sprintf("/boot/initrd.img-%s", kernelVersion)
-		} else {
-			initrdPath = fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
-		}
+		initrdPath := fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
 
 		espRoot := installRoot
 		espDir, err := prepareESPDir(espRoot)
@@ -891,11 +885,6 @@ func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTe
 	// Other distributions use initramfs- prefix
 	initrdPath := fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
 
-	// Check if we're dealing with Ubuntu, which uses different naming convention
-	if template.Target.OS == "ubuntu" {
-		initrdPath = fmt.Sprintf("/boot/initrd.img-%s", kernelVersion)
-	}
-
 	// Build dracut command with all required options
 	var cmdParts []string
 	cmdParts = append(cmdParts, "dracut")
@@ -906,15 +895,11 @@ func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTe
 	// Add systemd-veritysetup module if immutability is enabled
 	if template.IsImmutabilityEnabled() {
 		cmdParts = append(cmdParts, "--add", "systemd-veritysetup")
-		if template.Target.OS == "ubuntu" {
-			cmdParts = append(cmdParts, "--add", "dm")
-			cmdParts = append(cmdParts, "--add", "crypt")
-		}
+		cmdParts = append(cmdParts, "--add", "dm")
+		cmdParts = append(cmdParts, "--add", "crypt")
 	}
 
-	if template.Target.OS == "ubuntu" {
-		cmdParts = append(cmdParts, "--add", "systemd")
-	}
+	cmdParts = append(cmdParts, "--add", "systemd")
 
 	// Always add USB drivers
 	extraModules := strings.TrimSpace(template.SystemConfig.Kernel.EnableExtraModules)
