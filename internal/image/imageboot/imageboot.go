@@ -162,6 +162,8 @@ func updateBootConfigTemplate(installRoot, rootDevID, bootUUID, bootPrefix, hash
 	}
 
 	if template.IsImmutabilityEnabled() {
+		// For dm-verity, use /dev/mapper/root as the root device
+		// The initramfs script will create this device using the systemd.verity_* parameters
 		if err := file.ReplacePlaceholdersInFile("{{.RootPartition}}", "/dev/mapper/root", configFinalPath); err != nil {
 			log.Errorf("Failed to replace RootPartition in boot configuration: %v", err)
 			return fmt.Errorf("failed to replace RootPartition in boot configuration: %w", err)

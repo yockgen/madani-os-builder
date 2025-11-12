@@ -882,6 +882,7 @@ func getKernelVersion(installRoot string) (string, error) {
 
 // Helper to update initramfs for the given kernel version
 func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTemplate) error {
+	// Other distributions use initramfs- prefix
 	initrdPath := fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
 
 	// Build dracut command with all required options
@@ -894,7 +895,11 @@ func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTe
 	// Add systemd-veritysetup module if immutability is enabled
 	if template.IsImmutabilityEnabled() {
 		cmdParts = append(cmdParts, "--add", "systemd-veritysetup")
+		cmdParts = append(cmdParts, "--add", "dm")
+		cmdParts = append(cmdParts, "--add", "crypt")
 	}
+
+	cmdParts = append(cmdParts, "--add", "systemd")
 
 	// Always add USB drivers
 	extraModules := strings.TrimSpace(template.SystemConfig.Kernel.EnableExtraModules)
