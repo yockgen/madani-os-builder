@@ -77,7 +77,6 @@ clean-dist:
 
 build:
     FROM +golang-base
-    ARG VERSION="__auto__"
     
     # Copy git metadata for commit stamping
     COPY .git .git
@@ -103,8 +102,8 @@ build:
                      -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Toolname=Image-Composer' \
                      -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Organization=Open Edge Platform' \
                      -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.BuildDate=$BUILD_DATE' \
-             -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.CommitSHA=$COMMIT_SHA'" \
-        ./cmd/os-image-composer
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.CommitSHA=$COMMIT_SHA'" \
+            ./cmd/os-image-composer
             
     SAVE ARTIFACT build/os-image-composer AS LOCAL ./build/os-image-composer
     SAVE ARTIFACT /tmp/version.txt AS LOCAL ./build/os-image-composer.version
