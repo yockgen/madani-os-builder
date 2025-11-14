@@ -138,6 +138,9 @@ func (initrdMaker *InitrdMaker) BuildInitrdImage() (err error) {
 
 	initrdMaker.InitrdRootfsPath, initrdMaker.VersionInfo, err = initrdMaker.ImageOs.InstallInitrd()
 	if err != nil {
+		if cleanErr := initrdMaker.CleanInitrdRootfs(); cleanErr != nil {
+			log.Errorf("Failed to clean initrd rootfs after install failure: %v", cleanErr)
+		}
 		return fmt.Errorf("failed to install initrd: %w", err)
 	}
 

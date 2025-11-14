@@ -8,6 +8,7 @@ ARG HTTP_PROXY=$(echo $HTTP_PROXY)
 ARG HTTPS_PROXY=$(echo $HTTPS_PROXY)
 ARG NO_PROXY=$(echo $NO_PROXY)
 ARG REGISTRY
+ARG VERSION="__auto__"
 
 # Use pre-built Go image that already has most tools
 FROM ${REGISTRY}golang:1.24.1-bullseye
@@ -53,18 +54,34 @@ golang-base:
     COPY internal/ ./internal
     COPY image-templates/ ./image-templates
 
+version-info:
+    FROM +golang-base
+    ARG VERSION="__auto__"
+    # Copy .git directory to inspect tags for versioning metadata
+    COPY .git .git
+    RUN if [ -n "$VERSION" ] && [ "$VERSION" != "__auto__" ]; then \
+            echo "$VERSION" > /tmp/version.txt; \
+        else \
+            VERSION=$(git tag --sort=-creatordate | head -n1 2>/dev/null || echo "dev"); \
+            echo "$VERSION" > /tmp/version.txt; \
+        fi
+    SAVE ARTIFACT /tmp/version.txt
+
 all:
     BUILD +build
+
+clean-dist:
+    LOCALLY
+        RUN rm -rf dist
+        RUN mkdir -p dist
 
 build:
     FROM +golang-base
     
-    # Copy .git directory to enable git commands
+    # Copy git metadata for commit stamping
     COPY .git .git
-    
-    # Detect version from git tags
-    RUN VERSION=$(git tag --sort=-creatordate | head -n1 2>/dev/null || echo "dev") && \
-        echo "$VERSION" > /tmp/version
+    # Reuse canonical version metadata emitted by +version-info
+    COPY +version-info/version.txt /tmp/version.txt
     
     # Get git commit SHA
     RUN COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
@@ -73,9 +90,25 @@ build:
     # Get build date in UTC
     RUN BUILD_DATE=$(date -u '+%Y-%m-%d') && \
         echo "$BUILD_DATE" > /tmp/build_date
+
+    # Build with variables instead of cat substitution
+    RUN VERSION=$(cat /tmp/version.txt) && \
+        COMMIT_SHA=$(cat /tmp/commit_sha) && \
+        BUILD_DATE=$(cat /tmp/build_date) && \
+        CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
+        go build -trimpath -buildmode=pie -o build/live-installer \
+            -ldflags "-s -w \
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Version=$VERSION' \
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Toolname=Image-Composer' \
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Organization=Open Edge Platform' \
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.BuildDate=$BUILD_DATE' \
+                     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.CommitSHA=$COMMIT_SHA'" \
+            ./cmd/live-installer
+
+    SAVE ARTIFACT build/live-installer AS LOCAL ./build/live-installer
     
     # Build with variables instead of cat substitution
-    RUN VERSION=$(cat /tmp/version) && \
+    RUN VERSION=$(cat /tmp/version.txt) && \
         COMMIT_SHA=$(cat /tmp/commit_sha) && \
         BUILD_DATE=$(cat /tmp/build_date) && \
         CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
@@ -89,6 +122,7 @@ build:
             ./cmd/os-image-composer
             
     SAVE ARTIFACT build/os-image-composer AS LOCAL ./build/os-image-composer
+    SAVE ARTIFACT /tmp/version.txt AS LOCAL ./build/os-image-composer.version
 
 lint:
     FROM +golang-base
@@ -143,10 +177,14 @@ test-quick:
 
 deb:
     FROM debian:bookworm-slim
-    ARG VERSION=1.0.0
     ARG ARCH=amd64
-    
+    ARG VERSION="__auto__"
+
+    BUILD +clean-dist
+
     WORKDIR /pkg
+    COPY +version-info/version.txt /tmp/version.txt
+    RUN cp /tmp/version.txt /tmp/pkg_version
     
     # Create directory structure following FHS (Filesystem Hierarchy Standard)
     RUN mkdir -p usr/local/bin \
@@ -201,7 +239,8 @@ deb:
     COPY docs/architecture/os-image-composer-cli-specification.md usr/share/doc/os-image-composer/
     
     # Create the DEBIAN control file with proper metadata
-    RUN echo "Package: os-image-composer" > DEBIAN/control && \
+    RUN VERSION=$(cat /tmp/pkg_version) && \
+        echo "Package: os-image-composer" > DEBIAN/control && \
         echo "Version: ${VERSION}" >> DEBIAN/control && \
         echo "Section: utils" >> DEBIAN/control && \
         echo "Priority: optional" >> DEBIAN/control && \
@@ -215,8 +254,12 @@ deb:
         echo " user-provided template that specifies package lists, configurations," >> DEBIAN/control && \
         echo " and output formats for supported distributions." >> DEBIAN/control
     
-    # Build the debian package
-    RUN dpkg-deb --build . os-image-composer_${VERSION}_${ARCH}.deb
-    
-    # Save the debian package artifact to dist/ directory
-    SAVE ARTIFACT os-image-composer_${VERSION}_${ARCH}.deb AS LOCAL dist/os-image-composer_${VERSION}_${ARCH}.deb
+    # Build the debian package and stage in a stable location
+    RUN VERSION=$(cat /tmp/pkg_version) && \
+        mkdir -p /tmp/dist && \
+        dpkg-deb --build . /tmp/dist/os-image-composer_${VERSION}_${ARCH}.deb
+
+    # Save the debian package artifact and resolved version information to dist/
+    RUN VERSION=$(cat /tmp/pkg_version) && cp /tmp/pkg_version /tmp/dist/os-image-composer.version
+    SAVE ARTIFACT /tmp/dist/os-image-composer_*_${ARCH}.deb AS LOCAL dist/
+    SAVE ARTIFACT /tmp/dist/os-image-composer.version AS LOCAL dist/os-image-composer.version

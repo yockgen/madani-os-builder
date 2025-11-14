@@ -33,6 +33,9 @@ func DecompressFile(decompressPath, outputPath, decompressType string, sudo bool
 	case "xz":
 		cmdStr = fmt.Sprintf("xz -d -c %s > %s", decompressPath, outputPath)
 		_, err = shell.ExecCmd(cmdStr, sudo, shell.HostPath, nil)
+	case "zstd":
+		cmdStr = fmt.Sprintf("zstd -d -c %s > %s", decompressPath, outputPath)
+		_, err = shell.ExecCmd(cmdStr, sudo, shell.HostPath, nil)
 	default:
 		return fmt.Errorf("unsupported decompression type: %s", decompressType)
 	}
@@ -63,6 +66,9 @@ func CompressFile(compressPath, outputPath, compressType string, sudo bool) erro
 		_, err = shell.ExecCmd(cmdStr, sudo, shell.HostPath, nil)
 	case "xz":
 		cmdStr = fmt.Sprintf("xz -z -c %s > %s", compressPath, outputPath)
+		_, err = shell.ExecCmd(cmdStr, sudo, shell.HostPath, nil)
+	case "zstd":
+		cmdStr = fmt.Sprintf("zstd --threads=0 -f -o %s %s", outputPath, compressPath)
 		_, err = shell.ExecCmd(cmdStr, sudo, shell.HostPath, nil)
 	default:
 		return fmt.Errorf("unsupported compression type: %s", compressType)

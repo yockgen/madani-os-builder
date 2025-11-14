@@ -8,16 +8,16 @@ Developed in the Go programming language, or Golang, the tool initially builds c
 
 ## Get Started
 
-The initial release of the OS Image Composer tool has been tested and validated to work with Ubuntu 24.04, which is the recommended distribution for running the tool. Other standard Linux distributions should also work but haven't been validated. The plan for later releases is to include a containerized version to support portability across operating systems. 
+The initial release of the OS Image Composer tool has been tested and validated to work with Ubuntu 24.04, which is the recommended distribution for running the tool. Other standard Linux distributions should also work but haven't been validated. The plan for later releases is to include a containerized version to support portability across operating systems.
 
-* Download the tool by cloning and checking out the latest tagged release on [GitHub](https://github.com/open-edge-platform/os-image-composer/). Alternatively, you can download the [latest tagged release](https://github.com/open-edge-platform/os-image-composer/releases) of the ZIP archive. 
+* Download the tool by cloning and checking out the latest tagged release on [GitHub](https://github.com/open-edge-platform/os-image-composer/). Alternatively, you can download the [latest tagged release](https://github.com/open-edge-platform/os-image-composer/releases) of the ZIP archive.
 
 * Install version 1.22.12 or later of the Go programming language before building the tool; see the [Go installation instructions](https://go.dev/doc/manage-install) for your Linux distribution.
 
 
 ### Build the Tool
 
-Build the OS Image Composer command-line utility by using Go directly or by using the Earthly framework: 
+Build the OS Image Composer command-line utility by using Go directly or by using the Earthly framework:
 
 #### Development Build (Go)
 
@@ -26,6 +26,9 @@ For development and testing purposes, you can use Go directly:
 ```bash
 # Build the tool:
 go build -buildmode=pie -ldflags "-s -w" ./cmd/os-image-composer
+
+# Build the live-installer (Required for ISO image):
+go build -buildmode=pie -o ./build/live-installer -ldflags "-s -w" ./cmd/live-installer
 
 # Or run it directly:
 go run ./cmd/os-image-composer --help
@@ -48,6 +51,17 @@ go build -buildmode=pie \
     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.BuildDate=$BUILD_DATE' \
     -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.CommitSHA=$COMMIT'" \
   ./cmd/os-image-composer
+
+# Required for ISO image
+go build -buildmode=pie \
+  -o ./build/live-installer \
+  -ldflags "-s -w \
+    -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Version=$VERSION' \
+    -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Toolname=Image-Composer' \
+    -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.Organization=Open Edge Platform' \
+    -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.BuildDate=$BUILD_DATE' \
+    -X 'github.com/open-edge-platform/os-image-composer/internal/config/version.CommitSHA=$COMMIT'" \
+  ./cmd/live-installer
 ```
 
 #### Production Build (Earthly)
@@ -58,9 +72,8 @@ For production and release builds, use the Earthly framework, which produces a r
 # Default build (uses latest git tag for version)
 earthly +build
 
-# Build with specific version:
-earthly +build --version=1.0.0
-```
+# Build with custom version metadata
+earthly +build --VERSION=1.2.0
 
 ### Install via Debian Package (Ubuntu/Debian)
 
@@ -71,7 +84,7 @@ For Ubuntu and Debian systems, you can build and install OS Image Composer as a 
 Use the Earthly `+deb` target to create a `.deb` package:
 
 ```bash
-# Build with default parameters (version 1.0.0, amd64)
+# Build with default parameters (latest git tag, amd64)
 earthly +deb
 
 # Build with custom version and architecture
@@ -81,7 +94,7 @@ earthly +deb --VERSION=1.2.0 --ARCH=amd64
 earthly +deb --VERSION=1.0.0 --ARCH=arm64
 ```
 
-The package will be created in the `dist/` directory as `os-image-composer_<VERSION>_<ARCH>.deb`.
+The package will be created in the `dist/` directory as `os-image-composer_<VERSION>_<ARCH>.deb`. A companion file `dist/os-image-composer.version` captures the resolved version when the package was built.
 
 #### Install the Package
 
@@ -173,7 +186,7 @@ Before you compose an operating system image with the OS Image Composer tool, yo
     * **Required:** Manually install version 1.4.3+ following [mmdebstrap installation instructions](./docs/tutorial/prerequisite.md#mmdebstrap)
   * **Alternative**: Can use `debootstrap` for Debian-based images
 
-**Note:** If you installed os-image-composer via the Debian package, `mmdebstrap` may already be installed. You still need to install `ukify` separately following the instructions above. 
+**Note:** If you installed os-image-composer via the Debian package, `mmdebstrap` may already be installed. You still need to install `ukify` separately following the instructions above.
 
 ### Compose or Validate an Image
 
@@ -188,11 +201,11 @@ sudo os-image-composer build /usr/share/os-image-composer/examples/azl3-x86_64-e
 
 > Note: The default configuration at `/etc/os-image-composer/config.yml` is discovered automatically; no extra flags are required.
 
-# Validate a template: 
+# Validate a template:
 ./os-image-composer validate image-templates/azl3-x86_64-edge-raw.yml
 ```
 
-After the image finishes building, check your output directory. The exact name of the output directory varies by environment and image but should look something like this:   
+After the image finishes building, check your output directory. The exact name of the output directory varies by environment and image but should look something like this:
 
 ```
 /os-image-composer/tmp/os-image-composer/azl3-x86_64-edge-raw/imagebuild/Minimal_Raw
@@ -451,7 +464,7 @@ target:
 systemConfigs:
   - name: edge
     description: Default configuration for edge image
-    
+
     # Package Configuration
     packages:
       # Additional packages beyond the base system
@@ -469,7 +482,7 @@ systemConfigs:
 
 #### Key Components
 
-Here are the key components of an image template.  
+Here are the key components of an image template.
 
 ##### 1. `image`
 
@@ -570,7 +583,7 @@ echo ". /path/to/os-image-composer_completion.ps1" >> $PROFILE
 
 #### Examples of Completion in Action
 
-Once the completion script is installed, the tool is configured to suggest YAML files when completing the template file argument for the build and validate commands, and you can see that in action: 
+Once the completion script is installed, the tool is configured to suggest YAML files when completing the template file argument for the build and validate commands, and you can see that in action:
 
 ```bash
 # Tab-complete commands

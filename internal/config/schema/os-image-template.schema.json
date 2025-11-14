@@ -29,7 +29,7 @@
         "os": {
           "type": "string",
           "description": "Target operating system",
-          "enum": ["azure-linux", "edge-microvisor-toolkit", "wind-river-elxr"]
+          "enum": ["azure-linux", "edge-microvisor-toolkit", "wind-river-elxr", "ubuntu"]
         },
         "dist": {
           "type": "string",
@@ -231,6 +231,7 @@
         "name": { "type": "string", "description": "Kernel package name (from defaults)" },
         "version": { "type": "string", "description": "Kernel version" },
         "cmdline": { "type": "string", "description": "Kernel command line parameters" },
+        "enableExtraModules": { "type": "string", "description": "Additional kernel modules to be loaded" },
         "uki": { "type": "boolean", "description": "Enable Unified Kernel Image (from defaults)" },
         "packages": {
           "type": "array",

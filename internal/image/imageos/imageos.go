@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/open-edge-platform/os-image-composer/internal/utils/logger"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/mount"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/shell"
+	"github.com/open-edge-platform/os-image-composer/internal/utils/slice"
 )
 
 type ImageOsInterface interface {
@@ -178,7 +180,7 @@ func (imageOs *ImageOs) InstallImageOs(diskPathIdMap map[string]string) (version
 	}
 
 	log.Infof("Installing bootloader...")
-	if err = imageOs.imageBoot.InstallImageBoot(imageOs.installRoot, diskPathIdMap, imageOs.template); err != nil {
+	if err = imageOs.imageBoot.InstallImageBoot(imageOs.installRoot, diskPathIdMap, imageOs.template, pkgType); err != nil {
 		err = fmt.Errorf("failed to install image boot: %w", err)
 		return
 	}
@@ -525,10 +527,11 @@ func (imageOs *ImageOs) installImagePkgs(installRoot string, template *config.Im
 		imagePkgNum := len(imagePkgOrderedList)
 		// Force to use the local cache repository
 		var repoSrcList []string = []string{"/etc/apt/sources.list.d/local.list"}
+		var efiVariableAccessPkg = []string{"systemd-boot", "dracut-core"}
 		for i, pkg := range imagePkgOrderedList {
 			log.Infof("Installing package %d/%d: %s", i+1, imagePkgNum, pkg)
-			if pkg == "systemd-boot" {
-				// systemd-boot is a special case,
+			if slice.Contains(efiVariableAccessPkg, pkg) {
+				// systemd-boot and dracut-core are special cases,
 				// 'Failed to write 'LoaderSystemToken' EFI variable: No such file or directory' error is expected.
 				installCmd := fmt.Sprintf("apt-get install -y %s", pkg)
 
@@ -537,7 +540,15 @@ func (imageOs *ImageOs) installImagePkgs(installRoot string, template *config.Im
 						installCmd += fmt.Sprintf(" -o Dir::Etc::sourcelist=%s", repoSrc)
 					}
 				}
-				output, err := shell.ExecCmdWithStream(installCmd, true, installRoot, nil)
+
+				// Set environment variables to ensure non-interactive installation
+				envVars := []string{
+					"DEBIAN_FRONTEND=noninteractive",
+					"DEBCONF_NONINTERACTIVE_SEEN=true",
+					"DEBCONF_NOWARNINGS=yes",
+				}
+
+				output, err := shell.ExecCmdWithStream(installCmd, true, installRoot, envVars)
 				if err != nil {
 					if strings.Contains(output, "Failed to write 'LoaderSystemToken' EFI variable") {
 						log.Debugf("Expected error: The EFI variable shouldn't be accessed in chroot.")
@@ -565,14 +576,14 @@ func updateInitrdConfig(installRoot string, template *config.ImageTemplate) erro
 	if err := updateImageHostname(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image hostname: %w", err)
 	}
+	if err := addImageAdditionalFiles(installRoot, template); err != nil {
+		return fmt.Errorf("failed to add additional files to image: %w", err)
+	}
 	if err := updateImageUsrGroup(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image user/group: %w", err)
 	}
 	if err := updateImageNetwork(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image network: %w", err)
-	}
-	if err := addImageAdditionalFiles(installRoot, template); err != nil {
-		return fmt.Errorf("failed to add additional files to image: %w", err)
 	}
 	if err := addImageIDFile(installRoot, template); err != nil {
 		return fmt.Errorf("failed to add image ID file: %w", err)
@@ -587,14 +598,14 @@ func updateImageConfig(installRoot string, diskPathIdMap map[string]string, temp
 	if err := updateImageHostname(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image hostname: %w", err)
 	}
+	if err := addImageAdditionalFiles(installRoot, template); err != nil {
+		return fmt.Errorf("failed to add additional files to image: %w", err)
+	}
 	if err := updateImageUsrGroup(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image user/group: %w", err)
 	}
 	if err := updateImageNetwork(installRoot, template); err != nil {
 		return fmt.Errorf("failed to update image network: %w", err)
-	}
-	if err := addImageAdditionalFiles(installRoot, template); err != nil {
-		return fmt.Errorf("failed to add additional files to image: %w", err)
 	}
 	if err := addImageIDFile(installRoot, template); err != nil {
 		return fmt.Errorf("failed to add image ID file: %w", err)
@@ -882,38 +893,55 @@ func getKernelVersion(installRoot string) (string, error) {
 
 // Helper to update initramfs for the given kernel version
 func updateInitramfs(installRoot, kernelVersion string, template *config.ImageTemplate) error {
+	// Other distributions use initramfs- prefix
 	initrdPath := fmt.Sprintf("/boot/initramfs-%s.img", kernelVersion)
+
+	// Build dracut command with all required options
+	var cmdParts []string
+	cmdParts = append(cmdParts, "dracut")
+	cmdParts = append(cmdParts, "--force")
+	cmdParts = append(cmdParts, "--no-hostonly")
+	cmdParts = append(cmdParts, "--verbose")
+
+	// Add systemd-veritysetup module if immutability is enabled
 	if template.IsImmutabilityEnabled() {
-		cmd := fmt.Sprintf(
-			"dracut --force --add systemd-veritysetup --no-hostonly --verbose --kver %s %s",
-			kernelVersion,
-			initrdPath,
-		)
-		_, err := shell.ExecCmd(cmd, true, installRoot, nil)
-		if err != nil {
-			log.Errorf("Failed to update initramfs with veritysetup: %v", err)
-			err = fmt.Errorf("failed to update initramfs with veritysetup: %w", err)
-		}
-		return err
+		cmdParts = append(cmdParts, "--add", "systemd-veritysetup")
+		cmdParts = append(cmdParts, "--add", "dm")
+		cmdParts = append(cmdParts, "--add", "crypt")
 	}
-	// Check if the initrdPath file exists; if not, create it
-	fullInitrdPath := filepath.Join(installRoot, initrdPath)
-	if _, err := os.Stat(fullInitrdPath); err == nil {
-		// initrd file already exists
-		log.Debugf("Initramfs already exists, skipping update: %s", fullInitrdPath)
-		return nil
+
+	cmdParts = append(cmdParts, "--add", "systemd")
+
+	// Always add USB drivers
+	extraModules := strings.TrimSpace(template.SystemConfig.Kernel.EnableExtraModules)
+	if extraModules != "" {
+		cmdParts = append(cmdParts, fmt.Sprintf("--add-drivers '%s'", extraModules))
 	}
-	cmd := fmt.Sprintf(
-		"dracut -f %s %s",
-		initrdPath,
-		kernelVersion,
-	)
+
+	// Add kernel version and output path
+	cmdParts = append(cmdParts, "--kver", kernelVersion)
+	cmdParts = append(cmdParts, initrdPath)
+
+	// Execute single dracut command
+	cmd := strings.Join(cmdParts, " ")
 	_, err := shell.ExecCmd(cmd, true, installRoot, nil)
 	if err != nil {
-		log.Errorf("Failed to update initramfs: %v", err)
-		err = fmt.Errorf("failed to update initramfs: %w", err)
+		if template.IsImmutabilityEnabled() {
+			log.Errorf("Failed to update initramfs with veritysetup and USB drivers: %v", err)
+			return fmt.Errorf("failed to update initramfs with veritysetup and USB drivers: %w", err)
+		} else {
+			log.Errorf("Failed to update initramfs with USB drivers: %v", err)
+			return fmt.Errorf("failed to update initramfs with USB drivers: %w", err)
+		}
 	}
-	return err
+
+	if template.IsImmutabilityEnabled() {
+		log.Debugf("Initramfs updated successfully with veritysetup and USB drivers")
+	} else {
+		log.Debugf("Initramfs updated successfully with USB drivers")
+	}
+
+	return nil
 }
 
 // Helper to determine the ESP directory (assumes /boot/efi)
@@ -1240,6 +1268,12 @@ func createUser(installRoot string, template *config.ImageTemplate) error {
 			return fmt.Errorf("user verification failed for %s: %w", user.Name, err)
 		}
 
+		if user.StartupScript != "" {
+			if err := configUserStartupScript(installRoot, user); err != nil {
+				return fmt.Errorf("failed to configure startup script for user %s: %w", user.Name, err)
+			}
+		}
+
 		log.Infof("User %s created successfully", user.Name)
 	}
 
@@ -1376,4 +1410,29 @@ func hashPassword(password, hashAlgo, installRoot string) (string, error) {
 	log.Debugf("Password hashed successfully with algorithm %s", hashAlgo)
 
 	return hashedPassword, nil
+}
+
+func configUserStartupScript(installRoot string, user config.UserConfig) error {
+	log.Infof("Configuring user '%s' startup script to: %s", user.Name, user.StartupScript)
+
+	// Escape user.Name and user.StartupScript for regex safety
+	escapedUserName := regexp.QuoteMeta(user.Name)
+	escapedStartupScript := regexp.QuoteMeta(user.StartupScript)
+	startupScriptHostPath := filepath.Join(installRoot, user.StartupScript)
+
+	// Verify that the startup script exists in the image
+	if _, err := os.Stat(startupScriptHostPath); os.IsNotExist(err) {
+		log.Errorf("Startup script %s does not exist in image for user %s", user.StartupScript, user.Name)
+		return fmt.Errorf("startup script %s does not exist in image for user %s", user.StartupScript, user.Name)
+	}
+
+	findPattern := fmt.Sprintf(`^(%s.*):[^:]*$`, escapedUserName)
+	replacePattern := fmt.Sprintf(`\1:%s`, escapedStartupScript)
+	passwdFile := filepath.Join(installRoot, "etc", "passwd")
+
+	if err := file.ReplaceRegexInFile(findPattern, replacePattern, passwdFile); err != nil {
+		log.Errorf("Failed to update user %s startup command: %v", user.Name, err)
+		return fmt.Errorf("failed to update user %s startup command: %w", user.Name, err)
+	}
+	return nil
 }

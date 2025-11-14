@@ -113,6 +113,28 @@ func TestDecompressFile(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:           "zstd_without_sudo",
+			decompressPath: "/tmp/test/file.zst",
+			outputPath:     "/tmp/output/file",
+			decompressType: "zstd",
+			sudo:           false,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "zstd -d -c /tmp/test/file.zst > /tmp/output/file", Output: "", Error: nil},
+			},
+			expectError: false,
+		},
+		{
+			name:           "zstd_with_sudo",
+			decompressPath: "/tmp/test/file.zst",
+			outputPath:     "/tmp/output/file",
+			decompressType: "zstd",
+			sudo:           true,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "zstd -d -c /tmp/test/file.zst > /tmp/output/file", Output: "", Error: nil},
+			},
+			expectError: false,
+		},
+		{
 			name:           "unsupported_type",
 			decompressPath: "/tmp/test/file.zip",
 			outputPath:     "/tmp/output",
@@ -268,6 +290,28 @@ func TestCompressFile(t *testing.T) {
 			sudo:         true,
 			mockCommands: []shell.MockCommand{
 				{Pattern: "xz -z -c /tmp/test/file.txt > /tmp/output/file.xz", Output: "", Error: nil},
+			},
+			expectError: false,
+		},
+		{
+			name:         "zstd_without_sudo",
+			compressPath: "/tmp/test/file.txt",
+			outputPath:   "/tmp/output/file.zst",
+			compressType: "zstd",
+			sudo:         false,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "zstd --threads=0 -f -o /tmp/output/file.zst /tmp/test/file.txt", Output: "", Error: nil},
+			},
+			expectError: false,
+		},
+		{
+			name:         "zstd_with_sudo",
+			compressPath: "/tmp/test/file.txt",
+			outputPath:   "/tmp/output/file.zst",
+			compressType: "zstd",
+			sudo:         true,
+			mockCommands: []shell.MockCommand{
+				{Pattern: "zstd --threads=0 -f -o /tmp/output/file.zst /tmp/test/file.txt", Output: "", Error: nil},
 			},
 			expectError: false,
 		},
