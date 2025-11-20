@@ -269,7 +269,7 @@ func loadRepoConfig(repoUrl string, arch string) ([]debutils.RepoConfig, error) 
 		}
 	}
 
-	repoConfigs, err = debutils.BuildRepoConfigs(repoList, repoGroup, arch)
+	repoConfigs, err = debutils.BuildRepoConfigs(repoList, arch)
 	if err != nil {
 		return nil, fmt.Errorf("building user repo configs failed: %w", err)
 	}

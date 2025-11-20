@@ -23,3 +23,15 @@ repositories:
     enabled: true
     component: "main restricted universe multiverse"
     buildPath: "./builds/ubuntu24/security"  # Will be replaced with temp_dir/builds/ubuntu24/security at runtime
+  - name: "noble-updates"
+    type: "deb"
+    baseURL: "http://archive.ubuntu.com/ubuntu"
+    pkgPrefix: "http://archive.ubuntu.com/ubuntu"
+    releaseFile: "http://archive.ubuntu.com/ubuntu/dists/noble-updates/Release"
+    releaseSign: "http://archive.ubuntu.com/ubuntu/dists/noble-updates/Release.gpg"
+    pbGPGKey: "/usr/share/keyrings/ubuntu-archive-keyring.gpg"
+    gpgCheck: true
+    repoGPGCheck: true
+    enabled: true
+    component: "main restricted universe multiverse"
+    buildPath: "./builds/ubuntu24/updates"  # Will be replaced with temp_dir/builds/ubuntu24/updates at runtime

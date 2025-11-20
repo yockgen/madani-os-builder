@@ -23,7 +23,17 @@ packageRepositories:
   - codename: "jammy"
     url: "http://archive.ubuntu.com/ubuntu"
     pkey: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C" # Uncomment and replace in real config
-    component: "main universe"
+    component: "main restricted universe multiverse"
+
+  - codename: "jammy-updates"
+    url: "http://archive.ubuntu.com/ubuntu"
+    pkey: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+    component: "main restricted universe multiverse"
+
+  - codename: "jammy-security"
+    url: "http://security.ubuntu.com/ubuntu"
+    pkey: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+    component: "main restricted universe multiverse"
 
   - codename: "noble"
     url: "https://download.01.org/intel-linux-overlay/ubuntu/"

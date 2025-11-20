@@ -255,6 +255,15 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 		}
 	}
 
+	perlBaseCount := 0
+	for _, queuepkg := range byNameVer {
+		if queuepkg.Name == "perl-base" {
+			perlBaseCount++
+			log.Debugf("%s %s -> %s", queuepkg.Name, queuepkg.Version, filepath.Base(queuepkg.URL))
+		}
+	}
+	log.Infof("need a total of %d DEBs (no dependencies), perl-base packages: %d", len(byNameVer), perlBaseCount)
+
 	neededSet := make(map[string]struct{})
 	queue := make([]ospackage.PackageInfo, 0, len(requested))
 	for _, pi := range requested {
@@ -272,6 +281,12 @@ func ResolveDependencies(requested []ospackage.PackageInfo, all []ospackage.Pack
 	result := make([]ospackage.PackageInfo, 0)
 	var parentChildPairs [][]ospackage.PackageInfo // Track parent->child relationships for reporting
 	gotMissingPkg := false
+
+	log.Infof("need a total of %d DEBs (no dependencies))", len(queue))
+
+	for _, queuepkg := range queue {
+		log.Debugf("%s %s -> %s", queuepkg.Name, queuepkg.Version, filepath.Base(queuepkg.URL))
+	}
 
 	for len(queue) > 0 {
 		cur := queue[0]
@@ -635,6 +650,7 @@ func compareVersions(v1, v2 string) int {
 // ResolvePackage finds the best matching package for a given package name
 func ResolveTopPackageConflicts(want string, all []ospackage.PackageInfo) (ospackage.PackageInfo, bool) {
 	var candidates []ospackage.PackageInfo
+	log := logger.Logger()
 	for _, pi := range all {
 		// 1) exact name and version matched with .deb filenamae, e.g. acct_7.6.4-5+b1_amd64
 		if filepath.Base(pi.URL) == want+".deb" {
@@ -643,13 +659,22 @@ func ResolveTopPackageConflicts(want string, all []ospackage.PackageInfo) (ospac
 		}
 		// 2) exact name, e.g. acct
 		if pi.Name == want {
+			if pi.Name == "perl-base" {
+				log.Debugf("perl-base in top candidate package %s %s -> %s", pi.Name, pi.Version, filepath.Base(pi.URL))
+			}
 			candidates = append(candidates, pi)
-			break
+			continue
 		}
 		// 3) prefix by want-version ("acl-")
 		if strings.HasPrefix(pi.Name, want+"-") {
-			candidates = append(candidates, pi)
-			continue
+			// Extract string after "-" and compare with pi.Version
+			if dashIdx := strings.LastIndex(want, "-"); dashIdx != -1 {
+				verStr := want[dashIdx+1:]
+				if strings.Contains(pi.Version, verStr) {
+					candidates = append(candidates, pi)
+					continue
+				}
+			}
 		}
 		// 4) prefix by want.release ("acl-2.3.1-2.")
 		if strings.HasPrefix(pi.Name, want+".") {
@@ -723,8 +748,8 @@ func extractRepoBase(rawURL string) (string, error) {
 		return "", fmt.Errorf("URL does not contain /pool/: %s", rawURL)
 	}
 
-	// Rebuild base URL: scheme + host + prefix before /pool/
-	base := fmt.Sprintf("%s://%s%s/", u.Scheme, u.Host, parts[0])
+	// Rebuild base URL: scheme + host + prefix before /pool/ (without trailing slash)
+	base := fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, parts[0])
 	return base, nil
 }
 
@@ -781,10 +806,40 @@ func extractVersionRequirement(reqVers []string, depName string) ([]VersionConst
 	return constraints, found
 }
 
+// matchesRepoBase checks if candidateBase matches any of the parent repo bases
+func matchesRepoBase(parentBase []string, candidateBase string) bool {
+	for _, pBase := range parentBase {
+		if candidateBase == pBase {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospackage.PackageInfo) (ospackage.PackageInfo, error) {
-	parentBase, err := extractRepoBase(parentPkg.URL)
+	parent, err := extractRepoBase(parentPkg.URL)
 	if err != nil {
 		return ospackage.PackageInfo{}, fmt.Errorf("failed to extract repo base from parent package URL: %w", err)
+	}
+	// Extract parent repo base and handle potential multiple repo configurations
+	var imageBase []string
+	if len(RepoCfgs) > 0 {
+		for _, repocfg := range RepoCfgs {
+			if repocfg.PkgPrefix != "" {
+				imageBase = append(imageBase, repocfg.PkgPrefix)
+			}
+		}
+	}
+	if len(imageBase) == 0 && RepoCfg.PkgPrefix != "" {
+		imageBase = append(imageBase, RepoCfg.PkgPrefix)
+	}
+
+	var parentBase []string
+	// check if parent part of base
+	if matchesRepoBase(imageBase, parent) {
+		parentBase = imageBase
+	} else {
+		parentBase = []string{parent}
 	}
 
 	/////////////////////////////////////
@@ -800,11 +855,11 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	//yockgen: start
 	depNm := candidates[0].Name
 	//parentFilter := "libva-drm2" //"ca-certificates"     //"systemd-ukify"
-	depFilter := "python3.12-minimal" //"ca-certificates-shared" //"systemd"
+	depFilter := "libegl-mesa0" //"ca-certificates-shared" //"systemd"
 	// if strings.HasPrefix(parentPkg.Name, parentFilter) && depNm == depFilter {
 	if depNm == depFilter {
 		fmt.Printf("versionConstraints, hasVersionConstraint = extractVersionRequirement(%#v, %#v)\n", parentPkg.RequiresVer, candidates[0].Name)
-		fmt.Printf("\nyockgen99: parent=%s", parentPkg.Name)
+		fmt.Printf("\nyockgen99: parent=%s \n", parentPkg.Name)
 		for _, req := range parentPkg.RequiresVer {
 			if strings.HasPrefix(req, depNm) {
 				fmt.Printf(" required=%s\n", req)
@@ -814,13 +869,13 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 			fmt.Printf("yockgen99: no version specified for %s\n\n", candidates[0].Name)
 			//display all candidates
 			for _, itx := range candidates {
-				fmt.Printf("yockgen99: candidate=%s %s\n", itx.Name, itx.Version)
+				fmt.Printf("yockgen99: candidate=%s %s %s\n", itx.Name, itx.Version, itx.URL)
 			}
 		} else {
 
 			//display all candidates
 			for _, itx := range candidates {
-				fmt.Printf("yockgen99: candidate=%s %s\n", itx.Name, itx.Version)
+				fmt.Printf("yockgen99: candidate=%s %s %s\n", itx.Name, itx.Version, itx.URL)
 			}
 			fmt.Printf("yockgen99: version constraints for %s are: ", candidates[0].Name)
 			for _, vc := range versionConstraints {
@@ -872,7 +927,8 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 			}
 
 			if allConstraintsSatisfied {
-				if candidateBase == parentBase {
+				// if candidateBase == parentBase {
+				if matchesRepoBase(parentBase, candidateBase) {
 					sameRepoMatches = append(sameRepoMatches, candidate)
 				} else {
 					otherRepoMatches = append(otherRepoMatches, candidate)
@@ -884,7 +940,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 		if len(sameRepoMatches) > 0 {
 			// if strings.HasPrefix(parentPkg.Name, parentFilter) && depNm == depFilter {
 			if depNm == depFilter {
-				fmt.Printf("yockgen99: choosen candidate same: %s %s\n\n", sameRepoMatches[0].Name, sameRepoMatches[0].Version)
+				fmt.Printf("yockgen99: choosen candidate same: %s %s %s\n\n", sameRepoMatches[0].Name, sameRepoMatches[0].Version, sameRepoMatches[0].URL)
 			}
 			return sameRepoMatches[0], nil
 		}
@@ -893,7 +949,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 		if len(otherRepoMatches) > 0 {
 			// if strings.HasPrefix(parentPkg.Name, parentFilter) && depNm == depFilter {
 			if depNm == depFilter {
-				fmt.Printf("yockgen99: choosen candidate other: %s %s\n\n", otherRepoMatches[0].Name, otherRepoMatches[0].Version)
+				fmt.Printf("yockgen99: choosen candidate other: %s %s %s\n\n", otherRepoMatches[0].Name, otherRepoMatches[0].Version, otherRepoMatches[0].URL)
 			}
 			return otherRepoMatches[0], nil
 		}
@@ -920,7 +976,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	// If only one candidate, return it
 	if len(candidates) == 1 {
 		if depNm == depFilter {
-			fmt.Printf("yockgen99: choosen candidate only candidate: %s %s\n\n", candidates[0].Name, candidates[0].Version)
+			fmt.Printf("yockgen99: choosen candidate only candidate: %s %s %s\n\n", candidates[0].Name, candidates[0].Version, candidates[0].URL)
 		}
 		return candidates[0], nil
 	}
@@ -932,7 +988,8 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 		if err != nil {
 			continue
 		}
-		if candidateBase == parentBase {
+		// if candidateBase == parentBase {
+		if matchesRepoBase(parentBase, candidateBase) {
 			sameBaseCandidates = append(sameBaseCandidates, candidate)
 		}
 	}
@@ -941,7 +998,7 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 	if len(sameBaseCandidates) > 0 {
 		if len(sameBaseCandidates) == 1 {
 			if depNm == depFilter {
-				fmt.Printf("yockgen99: choosen candidate same no conts: %s %s\n\n", sameBaseCandidates[0].Name, sameBaseCandidates[0].Version)
+				fmt.Printf("yockgen99: choosen candidate same no conts: %s %s %s\n\n", sameBaseCandidates[0].Name, sameBaseCandidates[0].Version, sameBaseCandidates[0].URL)
 			}
 			return sameBaseCandidates[0], nil
 		}
@@ -951,19 +1008,26 @@ func resolveMultiCandidates(parentPkg ospackage.PackageInfo, candidates []ospack
 		for _, candidate := range sameBaseCandidates[1:] {
 			cmp := compareVersions(candidate.Version, latest.Version)
 			if cmp > 0 {
+				if depNm == depFilter {
+					fmt.Printf("yockgen99: processing candidate latest: %s %s %s\n\n", latest.Name, latest.Version, latest.URL)
+				}
 				latest = candidate
+
+				if depNm == depFilter {
+					fmt.Printf("yockgen99: processing candidate latest replacing: %s %s %s\n\n", latest.Name, latest.Version, latest.URL)
+				}
 			}
 		}
 
 		if depNm == depFilter {
-			fmt.Printf("yockgen99: choosen candidate latest: %s %s\n\n", latest.Name, latest.Version)
+			fmt.Printf("yockgen99: choosen candidate latest: %s %s %s\n\n", latest.Name, latest.Version, latest.URL)
 		}
 
 		return latest, nil
 	}
 
 	if depNm == depFilter {
-		fmt.Printf("yockgen99: choosen candidate first pick: %s %s\n\n", candidates[0].Name, candidates[0].Version)
+		fmt.Printf("yockgen99: choosen candidate first pick: %s %s %s\n\n", candidates[0].Name, candidates[0].Version, candidates[0].URL)
 	}
 
 	// Rule 2: If no candidate has the same repo, return the first candidate in other repos

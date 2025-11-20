@@ -104,9 +104,10 @@ func PackagesFromMultipleRepos() ([]ospackage.PackageInfo, error) {
 }
 
 // BuildRepoConfigs converts Repository entries to RepoConfig format
-func BuildRepoConfigs(userRepoList []Repository, repoGroup, arch string) ([]RepoConfig, error) {
+func BuildRepoConfigs(userRepoList []Repository, arch string) ([]RepoConfig, error) {
 	var userRepo []RepoConfig
 	for _, repoItem := range userRepoList {
+		connectSuccess := false
 		id := repoItem.ID
 		codename := repoItem.Codename
 		baseURL := repoItem.URL
@@ -140,7 +141,12 @@ func BuildRepoConfigs(userRepoList []Repository, repoGroup, arch string) ([]Repo
 					Arch:         localArch,
 				}
 				userRepo = append(userRepo, repo)
+				connectSuccess = true
 			}
+		}
+
+		if !connectSuccess {
+			return nil, fmt.Errorf("fail connecting to repository %s", baseURL)
 		}
 	}
 
@@ -155,8 +161,13 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 	repoList := make([]Repository, len(UserRepo))
 	repoGroup := "custrepo"
 	for i, repo := range UserRepo {
+		// if baseURL is a placeholder, dont process it
+		if repo.URL == "<URL>" {
+			continue
+		}
+		baseURL := strings.TrimPrefix(strings.TrimPrefix(repo.URL, "http://"), "https://")
 		repoList[i] = Repository{
-			ID:        fmt.Sprintf("%s%d", repoGroup, i+1),
+			ID:        fmt.Sprintf("%s%d", repoGroup+"-"+baseURL, i+1),
 			Codename:  repo.Codename,
 			URL:       repo.URL,
 			PKey:      repo.PKey,
@@ -164,7 +175,7 @@ func UserPackages() ([]ospackage.PackageInfo, error) {
 		}
 	}
 
-	userRepo, err := BuildRepoConfigs(repoList, repoGroup, Architecture)
+	userRepo, err := BuildRepoConfigs(repoList, Architecture)
 	if err != nil {
 		return nil, fmt.Errorf("building user repo configs failed: %w", err)
 	}
@@ -342,6 +353,12 @@ func MatchRequested(requests []string, all []ospackage.PackageInfo) ([]ospackage
 			requestedPkgs = append(requestedPkgs, want)
 			log.Warnf("requested package '%q' not found in repo", want)
 			gotMissingPkg = true
+		}
+	}
+
+	for _, queuepkg := range out {
+		if queuepkg.Name == "perl-base" {
+			log.Debugf("perl-base in top package %s %s -> %s", queuepkg.Name, queuepkg.Version, filepath.Base(queuepkg.URL))
 		}
 	}
 
