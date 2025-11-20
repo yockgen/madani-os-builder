@@ -51,7 +51,9 @@ var commandMap = map[string][]string{
 	"findmnt":            {"/usr/bin/findmnt"},
 	"flock":              {"/usr/bin/flock"},
 	"fuser":              {"/usr/bin/fuser"},
+	"getent":             {"/usr/bin/getent"},
 	"gpgconf":            {"/usr/bin/gpgconf"},
+	"groupadd":           {"/usr/sbin/groupadd"},
 	"gunzip":             {"/usr/bin/gunzip"},
 	"grep":               {"/usr/bin/grep"},
 	"grub-mkconfig":      {"/usr/sbin/grub-mkconfig"},
@@ -118,8 +120,8 @@ var commandMap = map[string][]string{
 	"grub-mkimage":       {"/usr/bin/grub-mkimage"},
 	"grub-install":       {"/usr/sbin/grub-install"},
 	"sbsign":             {"/usr/bin/sbsign"},
-	"test":               {"/bin/test"},
 	"systemctl":          {"/usr/bin/systemctl"},
+	"test":               {"/bin/test"},
 	// Add more mappings as needed
 }
 
