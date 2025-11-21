@@ -44,6 +44,7 @@ systemConfig: # Required
     - ubuntu-minimal
     - grub2-common
     - grub-efi-amd64-bin
+    - initramfs-tools
     - dracut-core
     - systemd
     - cryptsetup-bin

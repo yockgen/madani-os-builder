@@ -382,7 +382,12 @@ func getRpmPkgInstallList(template *config.ImageTemplate) []string {
 
 func getDebPkgInstallList(template *config.ImageTemplate) []string {
 	var head, middle, tail []string
-	imagePkgList := append(template.GetKernelPackages(), template.GetPackages()...)
+	var imagePkgList []string
+	// Exclude the template.EssentialPkgList as it is already installed by mmdebstrap
+	imagePkgList = append(imagePkgList, template.KernelPkgList...)
+	imagePkgList = append(imagePkgList, template.SystemConfig.Packages...)
+	imagePkgList = append(imagePkgList, template.BootloaderPkgList...)
+
 	for _, pkg := range imagePkgList {
 		if strings.HasPrefix(pkg, "base-files") {
 			head = append(head, pkg)
@@ -1248,26 +1253,19 @@ func createUser(installRoot string, template *config.ImageTemplate) error {
 			log.Debugf("Deleted password for user %s (no password set)", user.Name)
 		}
 
-		// Add user to groups if specified, filtering out template placeholders
-		if len(user.Groups) > 0 {
-			for _, group := range user.Groups {
-				// Skip template placeholders and invalid group names
-				if strings.HasPrefix(group, "<") && strings.HasSuffix(group, ">") {
-					log.Debugf("Skipping template placeholder group: %s for user %s", group, user.Name)
-					continue
-				}
-				if strings.TrimSpace(group) == "" {
-					log.Debugf("Skipping empty group for user %s", user.Name)
-					continue
-				}
-
-				groupCmd := fmt.Sprintf("usermod -aG %s %s", group, user.Name)
-				if _, err := shell.ExecCmd(groupCmd, true, installRoot, nil); err != nil {
-					log.Errorf("Failed to add user %s to group %s: %v", user.Name, group, err)
-					return fmt.Errorf("failed to add user %s to group %s: %w", user.Name, group, err)
-				}
-				log.Debugf("Added user %s to group %s", user.Name, group)
+		// Collect requested groups and auto-add sudo groups when needed
+		groupCandidates := collectUserGroups(user, template)
+		for _, group := range groupCandidates {
+			if err := ensureGroupExists(installRoot, group); err != nil {
+				return fmt.Errorf("failed to ensure group %s exists: %w", group, err)
 			}
+
+			groupCmd := fmt.Sprintf("usermod -aG %s %s", group, user.Name)
+			if _, err := shell.ExecCmd(groupCmd, true, installRoot, nil); err != nil {
+				log.Errorf("Failed to add user %s to group %s: %v", user.Name, group, err)
+				return fmt.Errorf("failed to add user %s to group %s: %w", user.Name, group, err)
+			}
+			log.Debugf("Added user %s to group %s", user.Name, group)
 		}
 
 		// Verify user creation
@@ -1285,6 +1283,63 @@ func createUser(installRoot string, template *config.ImageTemplate) error {
 	}
 
 	return nil
+}
+
+func ensureGroupExists(installRoot, group string) error {
+	cmd := fmt.Sprintf("getent group %s", group)
+	if _, err := shell.ExecCmdSilent(cmd, true, installRoot, nil); err == nil {
+		return nil
+	}
+
+	createCmd := fmt.Sprintf("groupadd %s", group)
+	if output, err := shell.ExecCmd(createCmd, true, installRoot, nil); err != nil {
+		if strings.Contains(output, "already exists") {
+			return nil
+		}
+		return fmt.Errorf("groupadd failed: %w", err)
+	}
+	return nil
+}
+
+func collectUserGroups(user config.UserConfig, template *config.ImageTemplate) []string {
+	var groups []string
+	seen := make(map[string]struct{})
+
+	appendGroup := func(group string) {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			return
+		}
+		if strings.HasPrefix(group, "<") && strings.HasSuffix(group, ">") {
+			return
+		}
+		if _, ok := seen[group]; ok {
+			return
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+	}
+
+	for _, group := range user.Groups {
+		appendGroup(group)
+	}
+
+	if user.Sudo {
+		for _, sudoGroup := range defaultSudoGroups(template) {
+			appendGroup(sudoGroup)
+		}
+	}
+
+	return groups
+}
+
+func defaultSudoGroups(template *config.ImageTemplate) []string {
+	switch template.Target.OS {
+	case "azure-linux", "edge-microvisor-toolkit":
+		return []string{"wheel", "sudo"}
+	default:
+		return []string{"sudo"}
+	}
 }
 
 // Helper function to set user password based on hash algorithm
