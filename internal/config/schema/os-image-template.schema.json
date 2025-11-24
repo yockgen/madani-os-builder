@@ -84,7 +84,7 @@
               "type": {
                 "type": "string",
                 "description": "Output format type",
-                "enum": ["raw", "qcow2", "vhd", "vhdx", "vmdk"]
+                "enum": ["raw", "qcow2", "vhd", "vhdx", "vmdk", "vdi"]
               },
               "compression": {
                 "type": "string",
