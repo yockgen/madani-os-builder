@@ -44,6 +44,7 @@ cleanup_image_files() {
     "raw")
       echo "Cleaning up raw image files from build directories..."
       sudo rm -rf ./tmp/*/imagebuild/*/*.raw 2>/dev/null || true
+      sudo rm -rf ./workspace/*/imagebuild/*/*.raw 2>/dev/null || true
       ;;
     "extracted")
       echo "Cleaning up extracted image files in current directory..."
@@ -52,6 +53,7 @@ cleanup_image_files() {
     "all"|*)
       echo "Cleaning up all temporary image files..."
       sudo rm -rf ./tmp/*/imagebuild/*/*.raw 2>/dev/null || true
+      sudo rm -rf ./workspace/*/imagebuild/*/*.raw 2>/dev/null || true
       rm -f *.raw 2>/dev/null || true
       ;;
   esac
@@ -76,9 +78,10 @@ run_qemu_boot_test() {
     echo "Found compressed image at: $FOUND_PATH"
     IMAGE_DIR=$(dirname "$FOUND_PATH")
     
-    # Fix permissions for the tmp directory recursively to allow access
-    echo "Setting permissions recursively for ./tmp directory"
-    sudo chmod -R 777 ./tmp
+    # Fix permissions for the image directory recursively to allow access
+    IMAGE_ROOT_DIR=$(echo "$IMAGE_DIR" | cut -d'/' -f2)  # Get the root directory (workspace or tmp)
+    echo "Setting permissions recursively for ./$IMAGE_ROOT_DIR directory"
+    sudo chmod -R 777 "./$IMAGE_ROOT_DIR"
     
     cd "$IMAGE_DIR"
     
@@ -101,6 +104,7 @@ run_qemu_boot_test() {
     sudo rm -f /tmp/*.raw 2>/dev/null || true
     sudo rm -rf ../../../cache/ 2>/dev/null || true
     sudo rm -rf ../../../tmp/*/imagebuild/*/*.raw 2>/dev/null || true
+    sudo rm -rf ../../../workspace/*/imagebuild/*/*.raw 2>/dev/null || true
     
     # Force filesystem sync and check space again
     sync
@@ -240,9 +244,10 @@ run_qemu_boot_test_iso() {
     echo "Found ISO image at: $FOUND_PATH"
     IMAGE_DIR=$(dirname "$FOUND_PATH")
     
-    # Fix permissions for the tmp directory recursively to allow access
-    echo "Setting permissions recursively for ./tmp directory"
-    sudo chmod -R 777 ./tmp
+    # Fix permissions for the image directory recursively to allow access
+    IMAGE_ROOT_DIR=$(echo "$IMAGE_DIR" | cut -d'/' -f2)  # Get the root directory (workspace or tmp)
+    echo "Setting permissions recursively for ./$IMAGE_ROOT_DIR directory"
+    sudo chmod -R 777 "./$IMAGE_ROOT_DIR"
     
     cd "$IMAGE_DIR"
     
