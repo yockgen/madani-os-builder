@@ -2,7 +2,7 @@ repositories:
   - name: "bianca"
     type: "deb"  # Repository type: rpm or deb
     # baseURL: "https://mirror.elxr.dev/elxr/dists/aria/main"
-    baseURL: "https://mirror.elxr.dev/elxr/dists/bianca/main"
+    baseURL: "https://mirror.elxr.dev/elxr"
     pkgPrefix: "https://mirror.elxr.dev/elxr/"
     releaseFile: "https://mirror.elxr.dev/elxr/dists/bianca/Release"
     releaseSign: "https://mirror.elxr.dev/elxr/dists/bianca/Release.gpg"
@@ -15,7 +15,7 @@ repositories:
   - name: "bianca-security"
     type: "deb"  # Repository type: rpm or deb
     # baseURL: "https://mirror.elxr.dev/elxr/dists/aria/main"
-    baseURL: "https://mirror.elxr.dev/elxr/dists/bianca-security/main"
+    baseURL: "https://mirror.elxr.dev/elxr"
     pkgPrefix: "https://mirror.elxr.dev/elxr/"
     releaseFile: "https://mirror.elxr.dev/elxr/dists/bianca-security/Release"
     releaseSign: "https://mirror.elxr.dev/elxr/dists/bianca/Release.gpg"
@@ -28,7 +28,7 @@ repositories:
   - name: "bianca-updates"
     type: "deb"  # Repository type: rpm or deb
     # baseURL: "https://mirror.elxr.dev/elxr/dists/aria/main"
-    baseURL: "https://mirror.elxr.dev/elxr/dists/bianca-updates/main"
+    baseURL: "https://mirror.elxr.dev/elxr/dists"
     pkgPrefix: "https://mirror.elxr.dev/elxr/"
     releaseFile: "https://mirror.elxr.dev/elxr/dists/bianca-updates/Release"
     releaseSign: "https://mirror.elxr.dev/elxr/dists/bianca-updates/Release.gpg"
