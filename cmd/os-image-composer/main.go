@@ -106,7 +106,17 @@ The tool supports building custom images for:
 	rootCmd.AddCommand(createVersionCommand())
 	rootCmd.AddCommand(createConfigCommand())
 	rootCmd.AddCommand(createCacheCommand())
-	rootCmd.AddCommand(createInstallCompletionCommand())
+
+	// Initialize Cobra's default completion command
+	rootCmd.InitDefaultCompletionCmd()
+	
+	// Add install subcommand to the completion command
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "completion" {
+			cmd.AddCommand(createCompletionInstallCommand())
+			break
+		}
+	}
 
 	attachLoggingHooks(rootCmd)
 
