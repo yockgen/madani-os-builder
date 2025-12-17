@@ -284,7 +284,7 @@ func TestLoadAndMergeTemplateWithRealYAML(t *testing.T) {
 		t.Fatalf("Failed to create directory structure: %v", err)
 	}
 
-	// Create default config with immutability enabled
+	// Create default config with immutability enabled and hash partition
 	defaultConfigContent := `
 image:
   name: default-image
@@ -294,6 +294,14 @@ target:
   dist: elxr12
   arch: x86_64
   imageType: raw
+disk:
+  name: default-disk
+  partitions:
+    - id: root
+      mountPoint: /
+    - id: roothashmap
+      type: linux
+      mountPoint: none
 systemConfig:
   name: default-system
   immutability:

@@ -771,6 +771,14 @@ func TestTrimUnusedSpace(t *testing.T) {
 				shell.Default = shell.NewMockExecutor(tt.mockCommands)
 			}
 
+			// For large_file_success test, pre-create the temporary file that qemu-img would create
+			if tt.name == "large_file_success" {
+				tempFile := filePath + ".tmp"
+				if err := os.WriteFile(tempFile, data, 0644); err != nil {
+					t.Fatalf("Failed to create temp file for test: %v", err)
+				}
+			}
+
 			// Call function
 			err := trimUnusedSpace(filePath)
 
