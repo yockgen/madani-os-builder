@@ -494,8 +494,8 @@ func validateAndFixImmutabilityConfig(template *ImageTemplate) {
 
 	// If no hash partition found, disable immutability with warning
 	if !hasHashPartition {
-		log.Warnf("Immutability is enabled but no hash partition found for dm-verity. ")
-		log.Warnf("Automatically disabling immutability to prevent build failure. ")
+		log.Warnf("Immutability is enabled but no hash partition found for dm-verity.")
+		log.Warnf("Automatically disabling immutability to prevent build failure.")
 		log.Warnf("To enable immutability, add a hash partition with ID 'roothashmap' or 'hash' and mountPoint 'none'.")
 
 		// Disable immutability
