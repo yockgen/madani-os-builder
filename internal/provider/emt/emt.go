@@ -214,6 +214,7 @@ func (p *Emt) installHostDependency() error {
 		"xorriso":      "xorriso",     // For ISO image creation
 		"grub-mkimage": "grub-common", // For ISO image UEFI Grub binary creation
 		"sbsign":       "sbsigntool",  // For the UKI image creation
+		"systemd-boot-efi": "systemd-boot-efi", // For UKI required file /usr/lib/systemd/boot/efi/linuxx64.efi.stub
 	}
 	hostPkgManager, err := system.GetHostOsPkgManager()
 	if err != nil {
