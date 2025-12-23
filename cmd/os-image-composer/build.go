@@ -9,6 +9,7 @@ import (
 	"github.com/open-edge-platform/os-image-composer/internal/provider/elxr"
 	"github.com/open-edge-platform/os-image-composer/internal/provider/emt"
 	"github.com/open-edge-platform/os-image-composer/internal/provider/ubuntu"
+	"github.com/open-edge-platform/os-image-composer/internal/provider/madani"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/logger"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/system"
 	"github.com/spf13/cobra"
@@ -131,6 +132,10 @@ func InitProvider(os, dist, arch string) (provider.Provider, error) {
 		if err := ubuntu.Register(os, dist, arch); err != nil {
 			return nil, fmt.Errorf("registering ubuntu provider failed: %v", err)
 		}
+	case madani.OsName:
+		if err := madani.Register(os, dist, arch); err != nil {
+			return nil, fmt.Errorf("registering madani provider failed: %v", err)
+		}	
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", os)
 	}

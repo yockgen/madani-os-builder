@@ -68,3 +68,13 @@ sudo dpkg -i mmdebstrap_1.4.3-6_all.deb
 ```bash
 sudo apt --fix-broken install
 ```
+
+## qemu
+
+```bash
+sudo apt install -y \
+  qemu-system-x86 \
+  qemu-utils \
+  ovmf \
+  qemu-system-gui
+```
