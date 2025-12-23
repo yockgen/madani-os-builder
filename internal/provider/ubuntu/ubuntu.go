@@ -178,6 +178,8 @@ func (p *ubuntu) installHostDependency() error {
 		"veritysetup":    "cryptsetup",     // For the veritysetup command
 		"sbsign":         "sbsigntool",     // For the UKI image creation
 		"ubuntu-keyring": "ubuntu-keyring", // For Ubuntu repository GPG keys
+		"systemd-boot-efi": "systemd-boot-efi", // For UKI required file /usr/lib/systemd/boot/efi/linuxx64.efi.stub
+		
 	}
 	hostPkgManager, err := system.GetHostOsPkgManager()
 	if err != nil {

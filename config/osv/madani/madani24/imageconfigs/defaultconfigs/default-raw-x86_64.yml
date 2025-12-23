@@ -34,7 +34,7 @@ disk:
       end: 4557MiB  # 513MiB + 4044MiB (4238528512 bytes) = 4557MiB
       fsType: ext4
       mountPoint: /
-      mountOptions: defaults, ro
+      mountOptions: defaults
 
     - id: roothashmap
       type: linux
@@ -62,6 +62,7 @@ systemConfig:
     enabled: false # default is true
 
   packages:
+    # base
     - ubuntu-minimal
     - systemd-boot
     - dracut-core
@@ -69,6 +70,17 @@ systemConfig:
     - cryptsetup-bin
     - openssh-server
     - systemd-resolved
+    # GUI packages
+    - xfce4 
+    - xfce4-goodies    
+    - xrdp 
+    - xfce4-session 
+    - dbus-x11 
+    - dbus-user-session
+    - x11-xserver-utils 
+    - xorg 
+    - mesa-utils
+    - ssl-cert
 
   additionalFiles:
     - local: ../additionalfiles/dhcp.network
