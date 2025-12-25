@@ -22,7 +22,9 @@ import (
 	"github.com/open-edge-platform/os-image-composer/internal/utils/mount"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/shell"
 	"github.com/open-edge-platform/os-image-composer/internal/utils/slice"
+	"github.com/open-edge-platform/os-image-composer/internal/hook"
 )
+
 
 type ImageOsInterface interface {
 	GetInstallRoot() string
@@ -180,11 +182,19 @@ func (imageOs *ImageOs) InstallImageOs(diskPathIdMap map[string]string) (version
 		return
 	}
 
+	// Add hook call here
+	log.Infof("Post rootfs hook execution...")
+	if err = hook.HookPostRootfs(imageOs.installRoot, imageOs.template); err != nil {
+		err = fmt.Errorf("Hook post-rootfs failed: %v", err)
+		return
+	}
+
 	log.Infof("Installing bootloader...")
 	if err = imageOs.imageBoot.InstallImageBoot(imageOs.installRoot, diskPathIdMap, imageOs.template, pkgType); err != nil {
 		err = fmt.Errorf("failed to install image boot: %w", err)
 		return
 	}
+	
 
 	if err = imagesecure.ConfigImageSecurity(imageOs.installRoot, imageOs.template); err != nil {
 		err = fmt.Errorf("failed to configure image security: %w", err)
@@ -626,6 +636,7 @@ func updateImageConfig(installRoot string, diskPathIdMap map[string]string, temp
 	if err := createResolvConfSymlink(installRoot, template); err != nil {
 		return fmt.Errorf("failed to create resolv.conf: %w", err)
 	}
+	
 	return nil
 }
 
@@ -672,6 +683,7 @@ func (imageOs *ImageOs) postImageOsInstall(installRoot string, template *config.
 	if err != nil {
 		return versionInfo, fmt.Errorf("failed to get image version info: %w", err)
 	}
+		
 	return versionInfo, nil
 }
 
