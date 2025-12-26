@@ -93,7 +93,7 @@ func GetHostOsPkgManager() (string, error) {
 	}
 
 	switch hostOsInfo["name"] {
-	case "Ubuntu", "Debian", "Debian GNU/Linux", "eLxr":
+	case "Ubuntu", "Debian", "Debian GNU/Linux", "eLxr", "madani":
 		return "apt", nil
 	case "Fedora", "CentOS", "Red Hat Enterprise Linux":
 		return "yum", nil

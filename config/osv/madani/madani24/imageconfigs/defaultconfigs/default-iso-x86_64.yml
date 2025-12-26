@@ -44,11 +44,31 @@ systemConfig: # Required
     - ubuntu-minimal
     - grub2-common
     - grub-efi-amd64-bin
-    - initramfs-tools
-    - dracut-core
+    # - initramfs-tools
+    # - dracut-core
     - systemd
-    - cryptsetup-bin
+    # - cryptsetup-bin
     - systemd-resolved
+    # GUI packages
+    - xfce4 
+    - xfce4-goodies    
+    - xrdp 
+    - xfce4-session 
+    - dbus-x11 
+    - dbus-user-session
+    - x11-xserver-utils 
+    - xorg 
+    - mesa-utils
+    - ssl-cert
+    - lightdm
+    - lightdm-gtk-greeter
+    #networking
+    - net-tools
+    - network-manager
+    - network-manager-gnome
+    - linux-firmware
+    - wireless-tools
+    - wpasupplicant
 
   additionalFiles:
     - local: ../additionalfiles/dhcp.network
@@ -60,3 +80,9 @@ systemConfig: # Required
     name: kernel
     packages:
      - linux-image-generic-hwe-24.04
+
+  users:
+    - name: user
+      password: "user"               # Do not commit real plaintext passwords
+      groups: ["wheel","sudo"]
+

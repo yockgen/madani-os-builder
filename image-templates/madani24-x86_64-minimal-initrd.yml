@@ -1,0 +1,9 @@
+image:
+  name: minimal-os-image-madani
+  version: "24.04"
+
+target:
+  os: madani
+  dist: madani24
+  arch: x86_64
+  imageType: img # Image type, valid value: [raw, iso, img].
