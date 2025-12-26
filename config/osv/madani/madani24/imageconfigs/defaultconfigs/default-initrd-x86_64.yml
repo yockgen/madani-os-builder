@@ -17,31 +17,25 @@ systemConfig:
     provider: grub # (grub for efi and legacy mode, or systemd-boot for efi mode)
 
   packages:
+    # core
     - ca-certificates
-    - vim
     - sudo
-    - net-tools
-    - openssh-client
-    - openssh-server
-    - procps
-    - less
-    - dbus
-    - policykit-1
-    - dosfstools
-    - efibootmgr
-    - eject
-    - curl
-    - mmdebstrap
-    - wget
-    - cryptsetup
-    - systemd-resolved
-    - cloud-guest-utils
-    - xterm
-    - initramfs-tools
-    - systemd-boot
+    # bootloader
     - grub-pc-bin
     - grub-efi-amd64-bin
-
+    # GUI
+    - dbus
+    - policykit-1
+    - xterm
+    - xorg
+    - xinit
+    - openbox
+    # operation
+    - qemu-utils
+    - pv
+    # calamares
+    - calamares
+    - calamares-settings-debian
 
   additionalFiles:
     - local: ../additionalfiles/dhcp.network
@@ -54,8 +48,22 @@ systemConfig:
       final: /usr/lib/systemd/system/serial-getty@.service
     - local: ../../../../../general/isolinux/attendedinstaller
       final: /root/attendedinstaller
-    - local: ../../../../../../build/live-installer
-      final: /usr/bin/live-installer
+    - local: ../additionalfiles/calamares-settings.conf
+      final: /etc/calamares/settings.conf
+    - local: ../additionalfiles/calamares-branding.desc
+      final: /etc/calamares/branding/madani/branding.desc
+    - local: ../additionalfiles/welcome.conf
+      final: /etc/calamares/modules/welcome.conf
+    - local: ../additionalfiles/partition.conf
+      final: /etc/calamares/modules/partition.conf
+    - local: ../additionalfiles/users.conf
+      final: /etc/calamares/modules/users.conf
+    - local: ../additionalfiles/locale.conf
+      final: /etc/calamares/modules/locale.conf
+    - local: ../additionalfiles/finished.conf
+      final: /etc/calamares/modules/finished.conf
+    # - local: ../../../../../../build/live-installer
+    #   final: /usr/bin/live-installer
 
   users:
     - name: root

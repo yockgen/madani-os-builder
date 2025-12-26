@@ -51,8 +51,25 @@ stty -echo
 # Disable kernel messages on the current terminal
 dmesg -D
 
-live-installer --config $TEMPLATE_DUMP_YAML --repo $CACHE_REPO --attended
+# Start X server in background
+export DISPLAY=:0
+Xorg :0 -ac -nolisten tcp vt7 &
+X_PID=$!
+
+# Wait for X to start
+sleep 3
+
+# Start a simple window manager
+openbox &
+OPENBOX_PID=$!
+
+# Launch calamares
+calamares
 installerExitCode=$?
+
+# Clean up X server and window manager
+kill $OPENBOX_PID 2>/dev/null
+kill $X_PID 2>/dev/null
 
 # Consume any buffered stdin to prevent it from being passed to any future programs,
 # as it may contain sensitive data
