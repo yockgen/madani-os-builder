@@ -84,6 +84,8 @@ systemConfig:
       final: /etc/apt/sources.list.d/ubuntu-noble.list
   
   hookScripts:
+    - local_post_download_packages: ../hookscripts/post_download.sh
+      target_post_download_packages: /hooks/post_download.sh
     - local_post_rootfs: ../hookscripts/post_rootfs.sh
       target_post_rootfs: /etc/hooks/post_rootfs.sh
   

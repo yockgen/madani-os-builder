@@ -177,7 +177,7 @@ func (p *madani) installHostDependency() error {
 		"grub-mkimage":     "grub-common",      // For ISO image UEFI Grub binary creation
 		"veritysetup":      "cryptsetup",       // For the veritysetup command
 		"sbsign":           "sbsigntool",       // For the UKI image creation
-		"ubuntu-keyring": "ubuntu-keyring", // For Ubuntu repository GPG keys
+		"ubuntu-keyring":   "ubuntu-keyring",   // For Ubuntu repository GPG keys
 		"systemd-boot-efi": "systemd-boot-efi", // For UKI required file /usr/lib/systemd/boot/efi/linuxx64.efi.stub
 	}
 	hostPkgManager, err := system.GetHostOsPkgManager()

@@ -139,10 +139,10 @@ type AdditionalFileInfo struct {
 
 // HookScriptInfo holds information about hook scripts to be included in the image
 type HookScriptInfo struct {
-    LocalPostRootfs  string `yaml:"local_post_rootfs,omitempty"`  // Local path to post-rootfs script
-    TargetPostRootfs string `yaml:"target_post_rootfs,omitempty"` // Target path in image for post-rootfs script
-    LocalPreRootfs   string `yaml:"local_pre_rootfs,omitempty"`   // For future pre-rootfs hooks
-    TargetPreRootfs  string `yaml:"target_pre_rootfs,omitempty"`  // For future pre-rootfs hooks
+	LocalPostRootfs            string `yaml:"local_post_rootfs,omitempty"`             // Local path to post-rootfs script
+	TargetPostRootfs           string `yaml:"target_post_rootfs,omitempty"`            // Target path in image for post-rootfs script
+	LocalPostDownloadPackages  string `yaml:"local_post_download_packages,omitempty"`  // For future post-download packages hooks
+	TargetPostDownloadPackages string `yaml:"target_post_download_packages,omitempty"` // For future post-download packages hooks
 }
 
 // KernelConfig holds the kernel configuration
@@ -246,13 +246,12 @@ func parseYAMLTemplate(data []byte, validateFull bool) (*ImageTemplate, error) {
 func (t *ImageTemplate) GetProviderName() string {
 	// Map OS/dist combinations to provider names
 	providerMap := map[string]map[string]string{
-		"azure-linux":      {"azl3": "AzureLinux3"},
-		"emt":              {"emt3": "EMT3.0"},
-		"wind-river-elxr":  {"elxr12": "eLxr12"},
-		"ubuntu":           {"ubuntu24": "ubuntu24"},
-	    "madani":           {"madani24": "madani24"},
+		"azure-linux":     {"azl3": "AzureLinux3"},
+		"emt":             {"emt3": "EMT3.0"},
+		"wind-river-elxr": {"elxr12": "eLxr12"},
+		"ubuntu":          {"ubuntu24": "ubuntu24"},
+		"madani":          {"madani24": "madani24"},
 	}
-	
 
 	if providers, ok := providerMap[t.Target.OS]; ok {
 		if provider, ok := providers[t.Target.Dist]; ok {
@@ -385,46 +384,93 @@ func (t *ImageTemplate) GetAdditionalFileInfo() []AdditionalFileInfo {
 func (t *ImageTemplate) GetHookScriptInfo() []HookScriptInfo {
 	var PathUpdatedList []HookScriptInfo
 	if len(t.SystemConfig.HookScripts) == 0 {
-		return []HookScriptInfo {}
+		return []HookScriptInfo{}
 	}
 
 	for i := range t.SystemConfig.HookScripts {
-		if t.SystemConfig.HookScripts[i].LocalPostRootfs == "" || t.SystemConfig.HookScripts[i].TargetPostRootfs == "" {
+		// Check if all local/target pairs are empty
+		hasPostRootfs := t.SystemConfig.HookScripts[i].LocalPostRootfs != "" && t.SystemConfig.HookScripts[i].TargetPostRootfs != ""
+		hasPostDownloadPackages := t.SystemConfig.HookScripts[i].LocalPostDownloadPackages != "" && t.SystemConfig.HookScripts[i].TargetPostDownloadPackages != ""
+
+		if !hasPostRootfs && !hasPostDownloadPackages {
 			log.Warnf("Ignoring hook script entry with empty local or target path: %+v",
 				t.SystemConfig.HookScripts[i])
-		} else {
+			continue
+		}
+
+		newHookScript := HookScriptInfo{}
+		validEntry := false
+
+		// Handle LocalPostRootfs
+		if hasPostRootfs {
 			if filepath.IsAbs(t.SystemConfig.HookScripts[i].LocalPostRootfs) {
 				if _, err := os.Stat(t.SystemConfig.HookScripts[i].LocalPostRootfs); err == nil {
-					PathUpdatedList = append(PathUpdatedList, t.SystemConfig.HookScripts[i])
+					newHookScript.LocalPostRootfs = t.SystemConfig.HookScripts[i].LocalPostRootfs
+					newHookScript.TargetPostRootfs = t.SystemConfig.HookScripts[i].TargetPostRootfs
+					validEntry = true
 				} else {
-					log.Warnf("Ignoring hook script entry with non-existent local path: %+v",
-						t.SystemConfig.HookScripts[i])
+					log.Warnf("Ignoring post-rootfs hook script with non-existent local path: %s",
+						t.SystemConfig.HookScripts[i].LocalPostRootfs)
 				}
 			} else {
-				if len(t.PathList) == 0 {
-					log.Warnf("Cannot resolve relative additional file path without template file context: %+v",
-						t.SystemConfig.HookScripts[i])
-				} else {
-					var found bool
+				if len(t.PathList) > 0 {
 					for _, path := range t.PathList {
 						templateDir := filepath.Dir(path)
 						candidatePath := filepath.Join(templateDir, t.SystemConfig.HookScripts[i].LocalPostRootfs)
 						if _, err := os.Stat(candidatePath); err == nil {
-							newFileInfo := HookScriptInfo{
-								LocalPostRootfs: candidatePath,
-								TargetPostRootfs: t.SystemConfig.HookScripts[i].TargetPostRootfs,
-							}
-							PathUpdatedList = append(PathUpdatedList, newFileInfo)
-							found = true
+							newHookScript.LocalPostRootfs = candidatePath
+							newHookScript.TargetPostRootfs = t.SystemConfig.HookScripts[i].TargetPostRootfs
+							validEntry = true
 							break
 						}
 					}
-					if !found {
-						log.Warnf("Ignoring hook script entry with non-existent local path: %+v",
-							t.SystemConfig.HookScripts[i])
+					if newHookScript.LocalPostRootfs == "" {
+						log.Warnf("Ignoring post-rootfs hook script with non-existent local path: %s",
+							t.SystemConfig.HookScripts[i].LocalPostRootfs)
 					}
+				} else {
+					log.Warnf("Cannot resolve relative post-rootfs hook script path without template file context: %s",
+						t.SystemConfig.HookScripts[i].LocalPostRootfs)
 				}
 			}
+		}
+
+		// Handle LocalPostDownloadPackages
+		if hasPostDownloadPackages {
+			if filepath.IsAbs(t.SystemConfig.HookScripts[i].LocalPostDownloadPackages) {
+				if _, err := os.Stat(t.SystemConfig.HookScripts[i].LocalPostDownloadPackages); err == nil {
+					newHookScript.LocalPostDownloadPackages = t.SystemConfig.HookScripts[i].LocalPostDownloadPackages
+					newHookScript.TargetPostDownloadPackages = t.SystemConfig.HookScripts[i].TargetPostDownloadPackages
+					validEntry = true
+				} else {
+					log.Warnf("Ignoring post-download-packages hook script with non-existent local path: %s",
+						t.SystemConfig.HookScripts[i].LocalPostDownloadPackages)
+				}
+			} else {
+				if len(t.PathList) > 0 {
+					for _, path := range t.PathList {
+						templateDir := filepath.Dir(path)
+						candidatePath := filepath.Join(templateDir, t.SystemConfig.HookScripts[i].LocalPostDownloadPackages)
+						if _, err := os.Stat(candidatePath); err == nil {
+							newHookScript.LocalPostDownloadPackages = candidatePath
+							newHookScript.TargetPostDownloadPackages = t.SystemConfig.HookScripts[i].TargetPostDownloadPackages
+							validEntry = true
+							break
+						}
+					}
+					if newHookScript.LocalPostDownloadPackages == "" {
+						log.Warnf("Ignoring post-download-packages hook script with non-existent local path: %s",
+							t.SystemConfig.HookScripts[i].LocalPostDownloadPackages)
+					}
+				} else {
+					log.Warnf("Cannot resolve relative post-download-packages hook script path without template file context: %s",
+						t.SystemConfig.HookScripts[i].LocalPostDownloadPackages)
+				}
+			}
+		}
+
+		if validEntry {
+			PathUpdatedList = append(PathUpdatedList, newHookScript)
 		}
 	}
 	return PathUpdatedList

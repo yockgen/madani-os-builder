@@ -168,18 +168,18 @@ func (p *ubuntu) PostProcess(template *config.ImageTemplate, err error) error {
 
 func (p *ubuntu) installHostDependency() error {
 	var dependencyInfo = map[string]string{
-		"mmdebstrap":     "mmdebstrap",     // For the chroot env build
-		"mkfs.fat":       "dosfstools",     // For the FAT32 boot partition creation
-		"mformat":        "mtools",         // For writing files to FAT32 partition
-		"xorriso":        "xorriso",        // For ISO image creation
-		"qemu-img":       "qemu-utils",     // For image file format conversion
-		"ukify":          "systemd-ukify",  // For the UKI image creation
-		"grub-mkimage":   "grub-common",    // For ISO image UEFI Grub binary creation
-		"veritysetup":    "cryptsetup",     // For the veritysetup command
-		"sbsign":         "sbsigntool",     // For the UKI image creation
-		"ubuntu-keyring": "ubuntu-keyring", // For Ubuntu repository GPG keys
+		"mmdebstrap":       "mmdebstrap",       // For the chroot env build
+		"mkfs.fat":         "dosfstools",       // For the FAT32 boot partition creation
+		"mformat":          "mtools",           // For writing files to FAT32 partition
+		"xorriso":          "xorriso",          // For ISO image creation
+		"qemu-img":         "qemu-utils",       // For image file format conversion
+		"ukify":            "systemd-ukify",    // For the UKI image creation
+		"grub-mkimage":     "grub-common",      // For ISO image UEFI Grub binary creation
+		"veritysetup":      "cryptsetup",       // For the veritysetup command
+		"sbsign":           "sbsigntool",       // For the UKI image creation
+		"ubuntu-keyring":   "ubuntu-keyring",   // For Ubuntu repository GPG keys
 		"systemd-boot-efi": "systemd-boot-efi", // For UKI required file /usr/lib/systemd/boot/efi/linuxx64.efi.stub
-		
+
 	}
 	hostPkgManager, err := system.GetHostOsPkgManager()
 	if err != nil {
