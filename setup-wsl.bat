@@ -1,5 +1,5 @@
 @echo off
-SETLOCAL EnableDelayedExpansion
+SETLOCAL DisableDelayedExpansion
 
 :: ==========================================
 :: SETTINGS & VARIABLES
@@ -10,44 +10,50 @@ SET "GO_VERSION=go1.25.5"
 SET "DISTRO=Ubuntu-24.04"
 :: ==========================================
 
-echo [1/5] Checking WSL and %DISTRO% status...
+echo [1/5] Checking %DISTRO% status...
 
-:: 1. Check if WSL feature is enabled
-dism.exe /online /get-features /format:table | findstr /I "Microsoft-Windows-Subsystem-Linux" | findstr /I "Enabled" >nul
-if %errorlevel% neq 0 (
-    echo [!] WSL feature is not enabled. Enabling now...
-    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-    echo [!] WSL features enabled. Please RESTART your computer and run this script again.
-    pause
-    exit
-)
-
-:: 2. Check if Ubuntu-24.04 is already installed
+:: 1. Check if Distro is installed (silencing the ERROR_ALREADY_EXISTS)
 wsl --list --quiet | findstr /C:"%DISTRO%" >nul
 if %errorlevel% neq 0 (
     echo [!] %DISTRO% not found. Installing now...
-    echo [!] AFTER the Ubuntu window finishes its setup, CLOSE it and RUN THIS SCRIPT AGAIN.
-    wsl --install -d %DISTRO%
+    wsl --install -d %DISTRO% --no-launch
+    echo.
+    echo ---------------------------------------------------------
+    echo  ACTION REQUIRED:
+    echo  1. A new window has opened for Ubuntu setup.
+    echo  2. Create your Username and Password in that window.
+    echo  3. ONCE YOU SEE THE COMMAND PROMPT, return to THIS window.
+    echo ---------------------------------------------------------
     pause
-    exit
 )
 
-echo [2/5] Ensuring Go %GO_VERSION% and Git are installed...
-:: 3. Run internal setup as root
-:: We use 'bash -l' to ensure we have a login shell environment
-wsl -d %DISTRO% -u root bash -lc "apt-get update && apt-get install -y wget tar git; if ! go version | grep -q '%GO_VERSION%'; then echo '[!] Installing Go...'; wget -q https://go.dev/dl/%GO_VERSION%.linux-amd64.tar.gz; rm -rf /usr/local/go && tar -C /usr/local -xzf %GO_VERSION%.linux-amd64.tar.gz; rm %GO_VERSION%.linux-amd64.tar.gz; fi"
+echo [2/5] Preparing System Directories...
+wsl -d %DISTRO% -u root mkdir -p /data
+wsl -d %DISTRO% -u root chmod 777 /data
 
-:: 4. Ensure Go is in PATH for the user (run as standard user)
-wsl -d %DISTRO% bash -lc "if ! grep -q '/usr/local/go/bin' ~/.bashrc; then echo 'export PATH=\$PATH:/usr/local/go/bin' >> ~/.bashrc; fi"
+echo [3/5] Installing Dependencies and Go...
+wsl -d %DISTRO% -u root apt-get update
+wsl -d %DISTRO% -u root apt-get install -y wget tar git
 
-echo [3/5] Checking repository: %REPO_DIR%...
-:: 5. Clone the repository using the variable (using $HOME to be safe)
-wsl -d %DISTRO% bash -lc "if [ ! -d \"\$HOME/%REPO_DIR%\" ]; then echo '[!] Cloning %REPO_URL%...'; cd \$HOME && git clone %REPO_URL%; else echo '[OK] %REPO_DIR% already exists.'; fi"
+:: Install Go
+wsl -d %DISTRO% -u root bash -c "if [ ! -d '/usr/local/go' ]; then wget -q https://go.dev/dl/%GO_VERSION%.linux-amd64.tar.gz -O /tmp/go.tar.gz && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz; fi"
 
-echo [4/5] Environment verification...
-wsl -d %DISTRO% bash -lc "echo 'Go Version: ' \$(/usr/local/go/bin/go version); echo 'Git Version: ' \$(git --version)"
+:: FIXED PATH COMMAND: Using printf with hex \x24 for '$' prevents ALL Windows expansion
+wsl -d %DISTRO% -u root bash -c "printf 'export PATH=\x24PATH:/usr/local/go/bin\n' > /etc/profile.d/golang.sh"
 
-echo [5/5] Success! Launching %DISTRO%...
-timeout /t 2 >nul
+echo [4/5] Cloning Repository to /data...
+wsl -d %DISTRO% -u root bash -c "if [ ! -d '/data/%REPO_DIR%' ]; then cd /data && git clone %REPO_URL%; fi"
+wsl -d %DISTRO% -u root chmod -R 777 /data/%REPO_DIR%
+
+echo [5/5] Final Verification...
+echo ----------------------------------------------
+:: Explicitly calling the full path for verification to bypass profile errors if they existed
+wsl -d %DISTRO% bash -c "export PATH=$PATH:/usr/local/go/bin; echo -n 'Go Version: ' && go version; echo -n 'Git Version: ' && git --version"
+echo ----------------------------------------------
+
+echo.
+echo [OK] Everything is ready! 
+echo [NOTE] If you still see a syntax error, it's from the OLD corrupted file.
+echo [NOTE] Restarting the terminal will fix it.
+pause
 wsl -d %DISTRO%
