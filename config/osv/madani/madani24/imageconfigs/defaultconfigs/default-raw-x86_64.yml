@@ -84,6 +84,10 @@ systemConfig:
       final: /etc/systemd/network/dhcp.network
     - local: ../additionalfiles/ubuntu-noble.list
       final: /etc/apt/sources.list.d/ubuntu-noble.list
+    - local: ../additionalfiles/mos-wallpaper.png
+      final: /usr/share/backgrounds/mos-wallpaper.png
+    - local: ../additionalfiles/xfce4-desktop.xml
+      final: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
   
   hookScripts:
     - local_post_download_packages: ../hookscripts/post_download.sh
